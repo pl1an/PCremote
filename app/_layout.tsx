@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StyleSheet } from "react-native";
+import { themes } from "./styles/themes";
 
 
 export type RootStackParamList = {
@@ -21,6 +22,7 @@ export default function RootLayout() {
             paddingBottom: insets.bottom,
             paddingLeft: Math.max(insets.left, 16),
             paddingRight: Math.max(insets.right, 16),
+            backgroundColor: themes["default"].background
         }
     });
     
