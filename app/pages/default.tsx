@@ -14,9 +14,6 @@ export const Default: React.FC = () => {
             dgram = require('react-native-udp');
         }
         catch (e){
-        dgram = null;
-        }
-        if (!dgram || typeof dgram.createSocket !== 'function'){
             Alert.alert(
                 'UDP unavailable',
                 'The native UDP module is not available in this environment. Use the bare workflow or a custom dev client to enable UDP.'
@@ -39,18 +36,32 @@ export const Default: React.FC = () => {
         }
         // Sends a broadcast message to discover the PC
         try{
+            let closeTimeout: any;
             socket.bind(0, () => {
-                socket.setBroadcast(true);
-
-                const message = Buffer.from('DISCOVER_PC');
-                socket.send(message, 0, message.length, 41234, '255.255.255.255', (err: any) => {
-                if (err) console.warn('UDP send error', err);
-                socket.close();
-                });
             });
 
+            console.log('Sending broadcast message');
+            const message = Buffer.from('DISCOVER_PC');
+            socket.send(message, 0, message.length, 41234, '255.255.255.255', (err: any) => {
+                if (err) console.warn('UDP send error', err);
+            });
+
+            closeTimeout = setTimeout(() => {
+                try { socket.close(); } catch (e) { }
+                Alert.alert(
+                    'No response',
+                    'No PC responded to the broadcast message.'
+                );
+            }, 3000);
+            socket.on('error', (err: any) => {
+                console.warn('UDP socket error', err);
+                try { socket.close(); } catch (e) { }
+                if (closeTimeout) clearTimeout(closeTimeout);
+            });
             socket.on('message', (msg: any, rinfo: any) => {
                 console.log('PC found:', msg.toString(), rinfo && rinfo.address);
+                try { socket.close(); } catch (e) { }
+                if (closeTimeout) clearTimeout(closeTimeout);
             });
         }
         catch (err) {
@@ -61,8 +72,8 @@ export const Default: React.FC = () => {
             console.warn('react-native-udp runtime error', err);
             try {
                 socket && socket.close && socket.close();
-            } catch (e) {
-                // ignore
+            }
+            catch (e) {
             }
         }
     };
@@ -71,10 +82,9 @@ export const Default: React.FC = () => {
     const connectIp = () => {
     };
 
-
     return (
         <View style={style_sheet.default_container}>
-            <Text style={style_sheet.default_text}>Connect to your PC</Text>
+            <Text style={style_sheet.default_text}>Connect to your PC </Text>
             <Button title="Connect through Broadcast" onPress={() => connectBroadcast()} />
             <Button title="Connect through IP" onPress={() => {}} />
         </View>
