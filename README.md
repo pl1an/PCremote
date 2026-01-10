@@ -1,50 +1,80 @@
-# Welcome to your Expo app 👋
+# nativeTemplate — Simple Expo / React Native Layout
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A minimal, file-based React Native app layout scaffolded with Expo. This README explains the repository structure, how the layout and routing are organized, and quick steps to run and extend the app.
 
-## Get started
+**Live demo:** Local development via Expo (see Getting started).
+
+**Stack:** Expo, React Native, TypeScript (config present), Expo Router (file-based routing)
+
+## Project Overview
+
+- **Purpose:** Provide a small, opinionated app layout that demonstrates a top-level layout, route pages, shared components, styles, and asset organization.
+- **Target audience:** Developers starting a new Expo app who want a compact, easy-to-read structure to extend.
+
+## Key Files & Layout
+
+Top-level app directory layout (simplified):
+
+- `app/` — primary app source (file-based routing)
+  - `_layout.tsx` — app shell / shared layout used by routes
+  - `index.tsx` — root route / entry screen
+  - `components/` — reusable UI components
+  - `pages/` — route pages (extra routes live here)
+  - `default.tsx` — fallback route or default content
+  - `styles/` — shared style tokens and global styles
+  - `types/` — shared TypeScript types
+
+- `assets/` — images and static assets used by the app
+
+This layout favors clarity over complexity: the `_layout.tsx` defines common chrome (header, nav, safe-area) and each route file under `app/` becomes a navigable page.
+
+## Getting started
 
 1. Install dependencies
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Start the Expo dev server
 
-## Learn more
+```bash
+npx expo start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+3. Open on device/emulator using the QR code or emulator options shown by Expo.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Notes:
+- Use the Expo client, a simulator, or a development build for native modules.
+- The project uses file-based routing — add files under `app/` to create new routes.
 
-## Join the community
+## Development tips
 
-Join our community of developers creating universal apps.
+- Add UI components to `app/components` and import them into routes or into `_layout.tsx`.
+- Keep global style tokens in `app/styles` and small per-component styles alongside components.
+- Put shared TypeScript interfaces in `app/types` to keep props and data shapes consistent.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Scripts
+
+- `npm install` — install dependencies
+- `npx expo start` — start the dev server
+
+(Other scripts from the original template remain available if present in `package.json`.)
+
+## Extending the Template
+
+- Add new routes: create `app/yourRoute.tsx` (or a folder with `index.tsx`).
+- Add nested layouts: create additional `_layout.tsx` files inside subfolders to scope layout behavior.
+- Add assets to `assets/images` and reference via `import` or `Expo.Asset`.
+
+## Contributing
+
+Contributions are welcome for improvements and small examples. Open an issue or PR with changes.
+
+## License
+
+This template is provided as-is. Add a LICENSE file to clarify usage if you plan to publish.
+
+---
+
+README updated to document the simple app layout and how to work with the project. See the `app/` directory for route and layout code.
