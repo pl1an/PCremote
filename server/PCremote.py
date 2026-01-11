@@ -35,6 +35,8 @@ def awaitBroadcast(bind: str = "0.0.0.0", port: int = 41234):
         # Looking for correct broadcast message
         if text == "DISCOVER_PC":
             print("Connection request received from", addr)
+            reply = b"AWAITING_CONFIRMATION"
+            s.sendto(reply, addr)
             try:
                 confirmation = input("Do you want to accept the connection to " + str(addr) + " (s/n)? ")
                 if confirmation.lower() != 's':
@@ -42,9 +44,9 @@ def awaitBroadcast(bind: str = "0.0.0.0", port: int = 41234):
                     continue
                 else:
                     print("Connection accepted.")
-                    reply = b"PC_HERE"
+                    reply = b"CONNECTION_ACCEPTED"
                     s.sendto(reply, addr)
-                    print("Replied with PC_HERE to", addr)
+                    print("Replied with CONNECTION_ACCEPTED to", addr)
                 s.close()
                 return
             except Exception as e:

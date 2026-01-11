@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, Button, StyleSheet } from 'react-native';
+import { View, Text, Button, StyleSheet, Touchable, TouchableOpacity } from 'react-native';
 import { Alert } from 'react-native';
 import { themes } from '../styles/themes';
 
@@ -23,7 +23,9 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
 
     const udp_socket_ref = useRef<any>(null);
     const tcp_socket_ref = useTcp();
+
     const [loading, setLoading] = useState(false);
+    const [awaiting_confirmation, setAwaitingConfirmation] = useState(false);
 
 
     const connectBroadcast = () => {
@@ -91,9 +93,18 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
                 udp_socket_ref.current = null;
             });
             socket.on('message', (msg: any, rinfo: any) => {
-                console.log('PC found:', msg.toString(), rinfo && rinfo.address);
-                if (closeTimeout) clearTimeout(closeTimeout);
-                stablishTCPConnection(rinfo.address);
+                if(msg.toString() === "AWAITING_CONFIRMATION"){
+                    if (closeTimeout) clearTimeout(closeTimeout);
+                    console.log('PC found:', msg.toString(), rinfo && rinfo.address);
+                    console.log('Awaiting user confirmation on PC...');
+                    setAwaitingConfirmation(true);
+                };
+                if(msg.toString() === "CONNECTION_ACCEPTED"){
+                    if (closeTimeout) clearTimeout(closeTimeout);
+                    console.log('Connection accepted by PC:', msg.toString(), rinfo && rinfo.address);
+                    setAwaitingConfirmation(false);
+                    stablishTCPConnection(rinfo.address);
+                };
             });
         }
 
@@ -142,11 +153,16 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
 
     return (
         <View style={style_sheet.default_container}>
-            <Text style={style_sheet.default_text}>Connect to your PC</Text>
+            <Text style={style_sheet.title}>Connect to your PC</Text>
+            {awaiting_confirmation && <Text style={style_sheet.confirmation_text}>Awaiting user confirmation on PC...</Text>}
             {!loading && (
                 <>
-                    <Button title="Connect through Broadcast" onPress={() => connectBroadcast()} />
-                    <Button title="Connect through IP" onPress={() => connectIp()} />
+                    <TouchableOpacity style={{...style_sheet.connect_button, marginTop: 40}} onPress={() => connectBroadcast()}>
+                        <Text style={{color: themes['default'].primary, fontSize: 16}}> Connect through Broadcast </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={style_sheet.connect_button} onPress={() => connectIp()}>
+                        <Text style={{color: themes['default'].primary, fontSize: 16}}> Connect through IP </Text>
+                    </TouchableOpacity>
                 </>
             )}
             {loading && <LoadingAnimation />}
@@ -162,9 +178,19 @@ const style_sheet = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  default_text: {
-    fontSize: 18,
+  title: {
+    fontSize: 30,
     color: themes['default'].primary,
+  },
+  connect_button: {
+    backgroundColor: themes['default'].secondary,
+    padding: 15,
+    borderRadius: 10,
+    marginTop: 20,
+  },
+  confirmation_text: {
+    color: themes['default'].primary,
+    fontStyle: 'italic',
   },
 });
 
