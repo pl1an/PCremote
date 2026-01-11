@@ -4,15 +4,25 @@ import { Alert } from 'react-native';
 import { themes } from '../styles/themes';
 
 import dgram from 'react-native-udp';
+import TcpSocket from 'react-native-tcp-socket';
 import { Buffer } from 'buffer';
+import { useTcp } from '../contexts/tcpContext';
 
 import LoadingAnimation from '../components/loadingAnimation';
 
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../_layout';
 
 
-export const Default: React.FC = () => {
 
-    const socketRef = useRef<null>(null);
+interface DefaultProps {
+    navigation: NativeStackNavigationProp<RootStackParamList, 'default'>;
+}
+
+export const Default: React.FC<DefaultProps> = ({navigation}) => {
+
+    const udp_socket_ref = useRef<any>(null);
+    const tcp_socket_ref = useTcp();
     const [loading, setLoading] = useState(false);
 
 
@@ -21,8 +31,8 @@ export const Default: React.FC = () => {
 
         // Tries to create a UDP socket
         let socket: any;
-        if(socketRef.current){
-            socket = socketRef.current;
+        if(udp_socket_ref.current){
+            socket = udp_socket_ref.current;
         }
         else{
             try{
@@ -30,7 +40,7 @@ export const Default: React.FC = () => {
                 //@ts-ignore
                 socket = dgram.createSocket('udp4');
                 socket.bind(0, () => {});
-                socketRef.current = socket;
+                udp_socket_ref.current = socket;
             }
             catch (err){
                 Alert.alert(
@@ -62,7 +72,7 @@ export const Default: React.FC = () => {
                 catch (e){
                     console.warn('UDP socket close error', e);
                 }
-                socketRef.current = null;
+                udp_socket_ref.current = null;
                 Alert.alert(
                     'No response',
                     'No PC responded to the broadcast message.'
@@ -78,19 +88,12 @@ export const Default: React.FC = () => {
                     console.warn('UDP socket close error', e);
                 }
                 if (closeTimeout) clearTimeout(closeTimeout);
-                socketRef.current = null;
+                udp_socket_ref.current = null;
             });
             socket.on('message', (msg: any, rinfo: any) => {
                 console.log('PC found:', msg.toString(), rinfo && rinfo.address);
-                setLoading(false);
-                try {
-                    socket.close();
-                }
-                catch (e) {
-                    console.warn('UDP socket close error', e);
-                }
                 if (closeTimeout) clearTimeout(closeTimeout);
-                socketRef.current = null;
+                stablishTCPConnection(rinfo.address);
             });
         }
 
@@ -114,13 +117,36 @@ export const Default: React.FC = () => {
     };
 
 
+    const stablishTCPConnection = (address:any) => {
+        const server = TcpSocket.createConnection({
+            host: address,
+            port: 41234, 
+        }, () => {
+            console.log('TCP connected');
+            if (tcp_socket_ref && typeof tcp_socket_ref === 'object') {
+                try {
+                    tcp_socket_ref.current = server;
+                }
+                catch (e) {
+                    console.warn('Failed to set tcp ref current', e);
+                }
+            }
+            else {
+                console.warn('TCP context ref is null or not available');
+            }
+            setLoading(false);
+            navigation.navigate('controller');
+        });
+    };
+
+
     return (
         <View style={style_sheet.default_container}>
             <Text style={style_sheet.default_text}>Connect to your PC</Text>
             {!loading && (
                 <>
                     <Button title="Connect through Broadcast" onPress={() => connectBroadcast()} />
-                    <Button title="Connect through IP" onPress={() => {}} />
+                    <Button title="Connect through IP" onPress={() => connectIp()} />
                 </>
             )}
             {loading && <LoadingAnimation />}
@@ -141,3 +167,7 @@ const style_sheet = StyleSheet.create({
     color: themes['default'].primary,
   },
 });
+
+
+
+export default Default; 

@@ -6,6 +6,7 @@ import { themes } from "./styles/themes";
 
 export type RootStackParamList = {
     default: undefined;
+    controller: undefined; 
 }
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -37,6 +38,7 @@ export default function RootLayout() {
             }}
         >
             <Stack.Screen name="default" component={require("./pages/default").Default} />
+            <Stack.Screen name="controller" component={require("./pages/controller").Controller} />
         </Stack.Navigator>
     );
 }

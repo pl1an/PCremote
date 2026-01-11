@@ -9,3 +9,5 @@ export const themes: { [key: string]: Theme } = {
         secondary_screen_shadow: "rgba(1, 1, 1, 0.5)"
     },
 }
+
+export default themes;
