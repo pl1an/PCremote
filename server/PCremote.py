@@ -9,6 +9,7 @@ import time
 def awaitBroadcast(bind: str = "0.0.0.0", port: int = 41234):
 
     # creating and binding udp socket to await for broadcasts
+    print("Setting up UDP socket...")
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
@@ -18,7 +19,8 @@ def awaitBroadcast(bind: str = "0.0.0.0", port: int = 41234):
     s.bind((bind, port))
 
     # waiting for broadcasts
-    print(f"Listening for UDP broadcast on {bind}:{port} (press Ctrl+C to stop)")
+    print(f"Listening for UDP broadcast on {bind}:{port}")
+    print("Awaiting client connection...\n")
     while True:
         data, addr = s.recvfrom(65535)
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -31,11 +33,17 @@ def awaitBroadcast(bind: str = "0.0.0.0", port: int = 41234):
             pass
         # Looking for correct broadcast message
         if text == "DISCOVER_PC":
-            print("Discovery ping received from", addr)
+            print("Connection request received from", addr)
             try:
-                reply = b"PC_HERE"
-                s.sendto(reply, addr)
-                print("Replied with PC_HERE to", addr)
+                confirmation = input("Do you want to accept the connection to " + str(addr) + " (s/n)? ")
+                if confirmation.lower() != 's':
+                    print("Connection rejected.")
+                    continue
+                else:
+                    print("Connection accepted.")
+                    reply = b"PC_HERE"
+                    s.sendto(reply, addr)
+                    print("Replied with PC_HERE to", addr)
                 return
             except Exception as e:
                 print("Failed to send reply:", e)
@@ -43,6 +51,8 @@ def awaitBroadcast(bind: str = "0.0.0.0", port: int = 41234):
 
 
 def main():
+    print("PC Remote")
+    print("Starting server...\n")
     awaitBroadcast()
 
 if __name__ == "__main__":
