@@ -1,8 +1,10 @@
-import argparse
 import socket
-import json
-import binascii
 import time
+import os
+
+
+
+connection_accepted = False
 
 
 
@@ -34,27 +36,18 @@ def awaitBroadcast(bind: str = "0.0.0.0", port: int = 41234):
             pass
         # Looking for correct broadcast message
         if text == "DISCOVER_PC":
-            print("Connection request received from", addr)
-            reply = b"AWAITING_CONFIRMATION"
-            s.sendto(reply, addr)
             try:
-                confirmation = input("Do you want to accept the connection to " + str(addr) + " (s/n)? ")
-                if confirmation.lower() != 's':
-                    print("Connection rejected.")
-                    continue
-                else:
-                    print("Connection accepted.")
-                    reply = b"CONNECTION_ACCEPTED"
-                    s.sendto(reply, addr)
-                    print("Replied with CONNECTION_ACCEPTED to", addr)
+                print("Connection request received from", addr)
+                s.sendto(b"PC_HERE", addr)
                 s.close()
-                return
             except Exception as e:
                 print("Failed to send reply:", e)
+            return
 
 
 
-def awaitControlRequests(bind: str = "0.0.0.0", port: int = 41234):
+# returns tuple with (listening_socket, connection_socket)
+def connectControlSocket(bind: str = "0.0.0.0", port: int = 41234) -> tuple[socket.socket, socket.socket]:
 
     # creating and binding tcp socket to await for control requests 
     print("\nSetting up TCP socket...")
@@ -69,8 +62,23 @@ def awaitControlRequests(bind: str = "0.0.0.0", port: int = 41234):
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] {addr[0]}:{addr[1]} connected\n")
 
+    # verifying client connection
+    confirmation = input("Do you want to accept the connection to " + str(addr) + " (s/n)? ")
+    if confirmation.lower() != 's':
+        print("Connection rejected.")
+        endComunication(conn, s)
+        return None, None
+    else:
+        print("Connection accepted.")
+        conn.sendall(b"CONFIRMED_CONNECTION")
+        return conn, s
+
+
+def awaitControlRequests(bind: str = "0.0.0.0", port: int = 41234):
     # waiting for control requests
-    print("Awaiting control requests...")
+    conn, s = connectControlSocket(bind, port)
+    if not conn or not s: return
+    print("\nAwaiting control requests...")
     while True:
         # getting data from client
         data = conn.recv(65535)
@@ -80,7 +88,6 @@ def awaitControlRequests(bind: str = "0.0.0.0", port: int = 41234):
             s.close()
             break
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{ts}] {addr[0]}:{addr[1]} -> {len(data)} bytes")
         # Trying to decode as UTF-8 and handling control request
         text = None
         try:
@@ -89,14 +96,32 @@ def awaitControlRequests(bind: str = "0.0.0.0", port: int = 41234):
             pass
         if text:
             print("Control request received:", text)
-            controlRequestHandler(text)
+            if controlRequestHandler(text, conn, s): break
 
 
 
-def controlRequestHandler(request: str):
+# Returns 1 if should stop listening for control requests, 0 otherwise
+def controlRequestHandler(request: str, conn: socket.socket, s: socket.socket) -> int:
     print("Handling control request:", request)
+    if(request == "END_CONNECTION"):
+        print("End connection request received.")
+        endComunication(conn, s)
+        return 1
+    if(request == "POWER_TOGGLE"):
+        print("Power toggle request received.")
+        endComunication(conn, s)
+        os.system("shutdown /s /t 0")
+        return 1
     pass
 
+
+
+def endComunication(conn: socket.socket, s: socket.socket):
+    conn.sendall(b"END_CONNECTION")
+    conn.close()
+    s.close()
+    print("Ending connection...")
+    pass
 
 
 def main():

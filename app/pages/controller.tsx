@@ -8,6 +8,7 @@ import TcpSocket from 'react-native-tcp-socket';
 import { Buffer } from 'buffer';
 import { useTcp } from '../contexts/tcpContext';
 
+//@ts-expect-error
 import Icon from 'react-native-vector-icons/Ionicons';
 
 import LoadingAnimation from '../components/loadingAnimation';

@@ -93,17 +93,11 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
                 udp_socket_ref.current = null;
             });
             socket.on('message', (msg: any, rinfo: any) => {
-                if(msg.toString() === "AWAITING_CONFIRMATION"){
+                if(msg.toString() === "PC_HERE"){
                     if (closeTimeout) clearTimeout(closeTimeout);
                     console.log('PC found:', msg.toString(), rinfo && rinfo.address);
-                    console.log('Awaiting user confirmation on PC...');
                     setAwaitingConfirmation(true);
-                };
-                if(msg.toString() === "CONNECTION_ACCEPTED"){
-                    if (closeTimeout) clearTimeout(closeTimeout);
-                    console.log('Connection accepted by PC:', msg.toString(), rinfo && rinfo.address);
-                    setAwaitingConfirmation(false);
-                    stablishTCPConnection(rinfo.address);
+                    stablishTcpConnection(rinfo.address);
                 };
             });
         }
@@ -127,26 +121,37 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
     const connectIp = () => {
     };
 
-
-    const stablishTCPConnection = (address:any) => {
+    
+    const stablishTcpConnection = (address:any) => {
         const server = TcpSocket.createConnection({
             host: address,
             port: 41234, 
         }, () => {
-            console.log('TCP connected');
-            if (tcp_socket_ref && typeof tcp_socket_ref === 'object') {
-                try {
-                    tcp_socket_ref.current = server;
+            // wait for confirmation from server
+            console.log('TCP connected. Awaiting confirmation...');
+            server.on('data', (data) => {
+                if(data.toString() === "CONFIRMED_CONNECTION"){
+                    setAwaitingConfirmation(false);
+                    console.log('Connection confirmed by server.');
+                    if (tcp_socket_ref && typeof tcp_socket_ref === 'object') {
+                        try {
+                            tcp_socket_ref.current = server;
+                        }
+                        catch (e) {
+                            console.warn('Failed to set tcp ref current', e);
+                        }
+                    }
+                    else {
+                        console.warn('TCP context ref is null or not available');
+                    }
+                    setLoading(false);
+                    navigation.navigate('controller');
                 }
-                catch (e) {
-                    console.warn('Failed to set tcp ref current', e);
+                if(data.toString() === "END_CONNECTION"){
+                    console.log('Connection ended by server.');
+                    server.destroy();
                 }
-            }
-            else {
-                console.warn('TCP context ref is null or not available');
-            }
-            setLoading(false);
-            navigation.navigate('controller');
+            });
         });
     };
 
