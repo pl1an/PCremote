@@ -13,6 +13,10 @@ import LoadingAnimation from '../components/loadingAnimation';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../_layout';
 
+//@ts-expect-error
+import Icon from 'react-native-vector-icons/Ionicons';
+import QrcodeScanner from '../components/qrcodeScanner';
+
 
 
 interface DefaultProps {
@@ -24,8 +28,14 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
     const udp_socket_ref = useRef<any>(null);
     const tcp_socket_ref = useTcp();
 
+    const [connected, setConnected] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [awaiting_confirmation, setAwaitingConfirmation] = useState(false);
+    const [message, setMessage] = useState({
+        show: false,
+        text: '',
+    });
+
+    const [waiting_for_qr, setWaitingForQr] = useState<"Waiting connection" | "Waiting camera button press" | "Waiting for QR scan" | "Done">("Waiting connection");
 
 
     const connectBroadcast = () => {
@@ -60,6 +70,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
             // Sending message
             let closeTimeout: any
             console.log('Sending broadcast message');
+            setMessage({show: true, text: 'Sending broadcast message to discover PC...'});
             const message = Buffer.from('DISCOVER_PC');
             socket.send(message, 0, message.length, 41234, '255.255.255.255', (err: any) => {
                 if (err) console.warn('UDP send error', err);
@@ -75,10 +86,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
                     console.warn('UDP socket close error', e);
                 }
                 udp_socket_ref.current = null;
-                Alert.alert(
-                    'No response',
-                    'No PC responded to the broadcast message.'
-                );
+                setMessage({show: true, text: 'No response from PC. Please ensure the PC application is running and try again.'});
             }, 3000);
             socket.on('error', (err: any) => {
                 console.warn('UDP socket error', err);
@@ -96,7 +104,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
                 if(msg.toString() === "PC_HERE"){
                     if (closeTimeout) clearTimeout(closeTimeout);
                     console.log('PC found:', msg.toString(), rinfo && rinfo.address);
-                    setAwaitingConfirmation(true);
+                    setMessage({show: true, text: 'PC found at ' + rinfo.address + '. Establishing TCP connection...'});
                     stablishTcpConnection(rinfo.address);
                 };
             });
@@ -112,7 +120,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
             try {
                 socket && socket.close && socket.close();
             }
-            catch (e) {
+            catch (e){
             }
         }
     };
@@ -128,11 +136,10 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
             port: 41234, 
         }, () => {
             // wait for confirmation from server
-            console.log('TCP connected. Awaiting confirmation...');
+            console.log('TCP connected. Awaiting key sharing...');
             server.on('data', (data) => {
                 if(data.toString() === "CONFIRMED_CONNECTION"){
-                    setAwaitingConfirmation(false);
-                    console.log('Connection confirmed by server.');
+                    setMessage({show: true, text: 'Scan the QR code on your PC to share the encryption key.'});
                     if (tcp_socket_ref && typeof tcp_socket_ref === 'object') {
                         try {
                             tcp_socket_ref.current = server;
@@ -145,32 +152,48 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
                         console.warn('TCP context ref is null or not available');
                     }
                     setLoading(false);
-                    navigation.navigate('controller');
-                }
-                if(data.toString() === "END_CONNECTION"){
-                    console.log('Connection ended by server.');
-                    server.destroy();
+                    setConnected(true);
+                    setWaitingForQr("Waiting camera button press");
                 }
             });
         });
     };
 
 
+    const confirmEncryptionKeyReceived = () => {
+        if(tcp_socket_ref.current){
+            const message = Buffer.from('ENCRYPTION_KEY_RECEIVED', 'utf-8');
+            tcp_socket_ref.current.write(message);
+        }
+    };
+
+
     return (
         <View style={style_sheet.default_container}>
             <Text style={style_sheet.title}>Connect to your PC</Text>
-            {awaiting_confirmation && <Text style={style_sheet.confirmation_text}>Awaiting user confirmation on PC...</Text>}
-            {!loading && (
-                <>
-                    <TouchableOpacity style={{...style_sheet.connect_button, marginTop: 40}} onPress={() => connectBroadcast()}>
-                        <Text style={{color: themes['default'].primary, fontSize: 16}}> Connect through Broadcast </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={style_sheet.connect_button} onPress={() => connectIp()}>
-                        <Text style={{color: themes['default'].primary, fontSize: 16}}> Connect through IP </Text>
-                    </TouchableOpacity>
-                </>
-            )}
+            {message.show && <Text style={style_sheet.message_text}>{message.text}</Text>}
+            {!loading && waiting_for_qr === "Waiting connection" && !connected && (<>
+                <TouchableOpacity style={{...style_sheet.connect_button, marginTop: 60}} onPress={() => connectBroadcast()}>
+                    <Text style={{color: themes['default'].primary, fontSize: 16}}> Connect through Broadcast </Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={style_sheet.connect_button} onPress={() => connectIp()}>
+                    <Text style={{color: themes['default'].primary, fontSize: 16}}> Connect through IP </Text>
+                </TouchableOpacity>
+            </>)}
             {loading && <LoadingAnimation />}
+            {waiting_for_qr === "Waiting camera button press" && (<>
+                <TouchableOpacity style={style_sheet.qrcode_container} onPress={() => setWaitingForQr("Waiting for QR scan")}>
+                    <Icon name="camera" size={60} color={themes['default'].primary} />
+                </TouchableOpacity>
+            </>)}
+            {waiting_for_qr === "Waiting for QR scan" && (<>
+                <View style={style_sheet.camera_container}>
+                    <QrcodeScanner onScanned={() => {
+                        setWaitingForQr("Done")
+                        confirmEncryptionKeyReceived();
+                    }}/>
+                </View>
+            </>)}
         </View>
     );
 };
@@ -178,25 +201,44 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
 
 
 const style_sheet = StyleSheet.create({
-  default_container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 30,
-    color: themes['default'].primary,
-  },
-  connect_button: {
-    backgroundColor: themes['default'].secondary,
-    padding: 15,
-    borderRadius: 10,
-    marginTop: 20,
-  },
-  confirmation_text: {
-    color: themes['default'].primary,
-    fontStyle: 'italic',
-  },
+    default_container: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    title: {
+        fontSize: 30,
+        color: themes['default'].primary,
+    },
+    connect_button: {
+        backgroundColor: themes['default'].secondary,
+        padding: 15,
+        borderRadius: 10,
+        marginTop: 20,
+    },
+    message_text: {
+        paddingHorizontal: 20,
+        textAlign: 'center',
+        marginTop: 10,
+        fontSize: 12,
+        color: themes['default'].primary,
+        fontStyle: 'italic',
+    },
+    qrcode_container: {
+        marginTop: 60,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: themes['default'].secondary,
+        borderRadius: 10,
+        padding: 10,
+    },
+    camera_container: {
+        marginTop: 20,
+        width: '90%',
+        height: '50%',
+        overflow: 'hidden',
+        borderRadius: 10,
+    },
 });
 
 

@@ -1,6 +1,8 @@
 import socket
 import time
 import os
+import qrcode
+import secrets
 
 
 
@@ -8,6 +10,7 @@ connection_accepted = False
 
 
 
+# awaits for udp broadcast from client and replies if correct message is received
 def awaitBroadcast(bind: str = "0.0.0.0", port: int = 41234):
 
     # creating and binding udp socket to await for broadcasts
@@ -46,6 +49,7 @@ def awaitBroadcast(bind: str = "0.0.0.0", port: int = 41234):
 
 
 
+# establishes tcp control socket and awaits for client connection
 # returns tuple with (listening_socket, connection_socket)
 def connectControlSocket(bind: str = "0.0.0.0", port: int = 41234) -> tuple[socket.socket, socket.socket]:
 
@@ -56,28 +60,70 @@ def connectControlSocket(bind: str = "0.0.0.0", port: int = 41234) -> tuple[sock
     s.bind((bind, port))
 
     # waiting for client connection
-    print(f"Awaiting for clinet connection on {bind}:{port}...")
+    print(f"Awaiting for client connection on {bind}:{port}...")
     s.listen(1)
     conn, addr = s.accept()
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] {addr[0]}:{addr[1]} connected\n")
 
     # verifying client connection
-    confirmation = input("Do you want to accept the connection to " + str(addr) + " (s/n)? ")
-    if confirmation.lower() != 's':
-        print("Connection rejected.")
-        endComunication(conn, s)
-        return None, None
-    else:
-        print("Connection accepted.")
-        conn.sendall(b"CONFIRMED_CONNECTION")
-        return conn, s
+    conn.sendall(b"CONFIRMED_CONNECTION")
+    return conn, s
 
 
-def awaitControlRequests(bind: str = "0.0.0.0", port: int = 41234):
+
+# generates random encryption key
+def generateEncryptionKey(key_length: int = 16) -> str:
+    print("Generating encryption key...")
+    encryption_key = secrets.token_bytes(key_length).hex()
+    print("Encryption key generated:", encryption_key)
+    return encryption_key
+
+# generates QR code for encryption key
+def generateEncryptionKeyQRCode(key: str, filename: str = "encryption_key_qr.png"):
+    print("\nGenerating QR code for encryption key...")
+    print("Scan this QR code with your mobile device to share the encryption key.\n")
+    qr = qrcode.QRCode(
+        version=None, 
+        border=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+    )
+    qr.add_data(key)
+    qr.make(fit=True)
+    qr.print_tty()
+
+
+def awaitEncryptionKeyExchange(conn: socket.socket, s: socket.socket):
+
+    # generating encryption key and its QR code
+    encryption_key = generateEncryptionKey(32) 
+    generateEncryptionKeyQRCode(encryption_key)
+
+    # awaiting for client confirmation
+    print("\nAwaiting for client confirmation of encryption key receipt...")
+    while True:
+        data = conn.recv(65535)
+        if not data: 
+            print("Client disconnected or failed to retrieve data.")
+            conn.close()
+            s.close()
+            return
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        # Trying to decode as UTF-8 and checking for confirmation message
+        text = None
+        try:
+            text = data.decode("utf-8")
+        except Exception:
+            pass
+        if text == "ENCRYPTION_KEY_RECEIVED":
+            print("Client confirmed receipt of encryption key.\n")
+            return
+
+
+
+# awaits for control requests from client
+def awaitControlRequests(conn: socket.socket, s: socket.socket, bind: str = "0.0.0.0", port: int = 41234):
     # waiting for control requests
-    conn, s = connectControlSocket(bind, port)
-    if not conn or not s: return
     print("\nAwaiting control requests...")
     while True:
         # getting data from client
@@ -126,9 +172,14 @@ def endComunication(conn: socket.socket, s: socket.socket):
 
 def main():
     print("PC Remote")
-    print("Starting server...\n")
+    print("Starting server\n")
+    # connecting to client
     awaitBroadcast()
-    awaitControlRequests()
+    conn, s = connectControlSocket()
+    # sharing encryption key
+    awaitEncryptionKeyExchange(conn, s)
+
+    #awaitControlRequests(conn, s)
 
 if __name__ == "__main__":
     main()
