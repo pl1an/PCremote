@@ -7,22 +7,27 @@ import dgram from 'react-native-udp';
 import TcpSocket from 'react-native-tcp-socket';
 import { Buffer } from 'buffer';
 import { useTcp } from '../contexts/tcpContext';
+import { useEncryptionKey, useHmacKey } from '../contexts/secureKeyContext';
+import { buildMessage } from '../protocols/messageMaster';
 
 //@ts-expect-error
 import Icon from 'react-native-vector-icons/Ionicons';
 
-import LoadingAnimation from '../components/loadingAnimation';
 
 
 
 export const Controller: React.FC = () => {
 
     const tcp_socket_ref = useTcp();
+    
+    const encryption_key_ref = useEncryptionKey(); 
+    const hmac_key_ref = useHmacKey();
 
 
     const sendControlSignal = (signal: string) => {
-        if(tcp_socket_ref.current){
-            const message = Buffer.from(signal, 'utf-8');
+        if(tcp_socket_ref.current && encryption_key_ref.current && hmac_key_ref.current){
+            const message = buildMessage(signal, encryption_key_ref.current, hmac_key_ref.current);
+            console.log("Sending control signal:", message);
             tcp_socket_ref.current.write(message);
         }
     };

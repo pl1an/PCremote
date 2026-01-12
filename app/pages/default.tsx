@@ -7,6 +7,8 @@ import dgram from 'react-native-udp';
 import TcpSocket from 'react-native-tcp-socket';
 import { Buffer } from 'buffer';
 import { useTcp } from '../contexts/tcpContext';
+import QrcodeScanner from '../components/qrcodeScanner';
+import { useEncryptionKey, useHmacKey, useMasterKey } from '../contexts/secureKeyContext';
 
 import LoadingAnimation from '../components/loadingAnimation';
 
@@ -15,7 +17,8 @@ import { RootStackParamList } from '../_layout';
 
 //@ts-expect-error
 import Icon from 'react-native-vector-icons/Ionicons';
-import QrcodeScanner from '../components/qrcodeScanner';
+import { deriveKeys } from '../protocols/deriveMaster';
+import { buildMessage } from '../protocols/messageMaster';
 
 
 
@@ -36,6 +39,10 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
     });
 
     const [waiting_for_qr, setWaitingForQr] = useState<"Waiting connection" | "Waiting camera button press" | "Waiting for QR scan" | "Done">("Waiting connection");
+
+    const master_key_ref = useMasterKey();
+    const hmac_key_ref = useHmacKey();
+    const encryption_key_ref = useEncryptionKey();
 
 
     const connectBroadcast = () => {
@@ -160,10 +167,44 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
     };
 
 
-    const confirmEncryptionKeyReceived = () => {
+    const confirmEncryptionKeyReceived = (data: string) => {
+
+        // Deriving encryption and HMAC keys from master key
+        try{
+            master_key_ref.current = data;
+            let derived_keys = deriveKeys(master_key_ref.current);
+            encryption_key_ref.current = derived_keys.encryption_key;
+            console.log('Derived encryption key:', derived_keys.encryption_key);
+            hmac_key_ref.current = derived_keys.hmac_key;
+            console.log('Derived hmac key:', derived_keys.hmac_key);
+        }
+        catch (e){
+            console.warn('Failed to derive keys from master key', e);
+        }
+
+        // Sending confirmation to server
         if(tcp_socket_ref.current){
-            const message = Buffer.from('ENCRYPTION_KEY_RECEIVED', 'utf-8');
+            const message = buildMessage('MASTER_KEY_RECEIVED', encryption_key_ref.current, hmac_key_ref.current);
+            console.log('Building authentication message and sending: ', message); 
             tcp_socket_ref.current.write(message);
+            // Await for authorization from server
+            let authenticationTimeout: any;
+            tcp_socket_ref.current.on('data', (data: any) => {
+                if(data.toString() === "CLIENT_AUTHENTICATED"){
+                    console.log('Authentication confirmed by server. Navigating to controller.');
+                    setLoading(false);
+                    setMessage({show: false, text: ''});
+                    if (authenticationTimeout) clearTimeout(authenticationTimeout);
+                    navigation.navigate('controller');
+                }
+            });
+            // Setting timeout for server response
+            authenticationTimeout = setTimeout(() => {
+                setLoading(false);
+                setMessage({show: true, text: 'No authorization response from PC. Please try reconnecting.'});
+                setConnected(false);
+                setWaitingForQr("Waiting connection");
+            }, 5000);
         }
     };
 
@@ -188,9 +229,11 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
             </>)}
             {waiting_for_qr === "Waiting for QR scan" && (<>
                 <View style={style_sheet.camera_container}>
-                    <QrcodeScanner onScanned={() => {
+                    <QrcodeScanner onScanned={(data) => {
                         setWaitingForQr("Done")
-                        confirmEncryptionKeyReceived();
+                        setMessage({show: true, text: 'Waiting for authorization from PC...'});
+                        setLoading(true);
+                        confirmEncryptionKeyReceived(data);
                     }}/>
                 </View>
             </>)}

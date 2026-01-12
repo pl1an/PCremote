@@ -4,9 +4,11 @@ import os
 import qrcode
 import secrets
 
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.backends import default_backend
 
-
-connection_accepted = False
+from safeParser import receiveSecureMessage, InvalidMessage
 
 
 
@@ -72,17 +74,17 @@ def connectControlSocket(bind: str = "0.0.0.0", port: int = 41234) -> tuple[sock
 
 
 
-# generates random encryption key
-def generateEncryptionKey(key_length: int = 16) -> str:
-    print("Generating encryption key...")
-    encryption_key = secrets.token_bytes(key_length).hex()
-    print("Encryption key generated:", encryption_key)
-    return encryption_key
+# generates random master key
+def generateMasterKey(key_length: int = 16) -> tuple[str, str]:
+    print("Generating master kes...")
+    master_key = secrets.token_bytes(key_length).hex()
+    print("Master key generated:", master_key)
+    return master_key
 
 # generates QR code for encryption key
 def generateEncryptionKeyQRCode(key: str, filename: str = "encryption_key_qr.png"):
-    print("\nGenerating QR code for encryption key...")
-    print("Scan this QR code with your mobile device to share the encryption key.\n")
+    print("Generating QR code for master key...")
+    print("Scan this QR code with your mobile device to share the master key.\n")
     qr = qrcode.QRCode(
         version=None, 
         border=1,
@@ -92,15 +94,42 @@ def generateEncryptionKeyQRCode(key: str, filename: str = "encryption_key_qr.png
     qr.make(fit=True)
     qr.print_tty()
 
+# derives both encryption and hmac keys from master key using HKDF
+# returns tuple with (encryption_key, hmac_key)
+def deriveKeys(master_key_hex: str, key_lenght: int) -> tuple[str, str]:
+    master_key = bytes.fromhex(master_key_hex)
+    encryption_hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=key_lenght,
+        salt=b"PCREMOTE_SALT",
+        info=b"encryption",
+        backend=default_backend()
+    )
+    hmac_hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=key_lenght,
+        salt=b"PCREMOTE_SALT",
+        info=b"hmac",
+        backend=default_backend()
+    )
+    encryption_key = encryption_hkdf.derive(master_key).hex()
+    print("Encryption key derived: ", encryption_key)
+    hmac_key = hmac_hkdf.derive(master_key).hex()
+    print("HMAC key derived: ", hmac_key, "\n")
+    return encryption_key, hmac_key
 
-def awaitEncryptionKeyExchange(conn: socket.socket, s: socket.socket):
+
+# awaits for encryption key exchange confirmation from client
+# returns tuple with (master_key, encryption_key, hmac_key) or None if failed
+def awaitEncryptionKeyExchange(conn: socket.socket, s: socket.socket) -> None | tuple[str, str, str]:
 
     # generating encryption key and its QR code
-    encryption_key = generateEncryptionKey(32) 
-    generateEncryptionKeyQRCode(encryption_key)
+    master_key = generateMasterKey(32) 
+    encryption_key, hmac_key = deriveKeys(master_key, 32)
+    generateEncryptionKeyQRCode(master_key)
 
     # awaiting for client confirmation
-    print("\nAwaiting for client confirmation of encryption key receipt...")
+    print("\nAwaiting for client authentication...")
     while True:
         data = conn.recv(65535)
         if not data: 
@@ -108,23 +137,32 @@ def awaitEncryptionKeyExchange(conn: socket.socket, s: socket.socket):
             conn.close()
             s.close()
             return
-        ts = time.strftime("%Y-%m-%d %H:%M:%S")
-        # Trying to decode as UTF-8 and checking for confirmation message
-        text = None
+        # Receiving and processing secure message
         try:
-            text = data.decode("utf-8")
-        except Exception:
-            pass
-        if text == "ENCRYPTION_KEY_RECEIVED":
-            print("Client confirmed receipt of encryption key.\n")
-            return
+            text = receiveSecureMessage(data.decode("utf-8"), encryption_key, hmac_key)
+            if text == "MASTER_KEY_RECEIVED":
+                conn.sendall(b"CLIENT_AUTHENTICATED")
+                print("Client authenticated successfully.\n")
+                return master_key, encryption_key, hmac_key
+            else:
+                raise InvalidMessage("Unexpected confirmation message")
+        except InvalidMessage as e:
+            print("Received invalid authentication message: ", e)
+            print("Client may not have received the master key correctly.")
+            print("WARNING: Network might be compromised\n")
+            endComunication(conn, s)
+            return None
 
 
 
 # awaits for control requests from client
-def awaitControlRequests(conn: socket.socket, s: socket.socket, bind: str = "0.0.0.0", port: int = 41234):
+def awaitControlRequests(
+    conn: socket.socket, s: socket.socket, 
+    encryption_key: str, hmac_key: str,
+    bind: str = "0.0.0.0", port: int = 41234
+):
     # waiting for control requests
-    print("\nAwaiting control requests...")
+    print("Awaiting control requests...")
     while True:
         # getting data from client
         data = conn.recv(65535)
@@ -133,16 +171,15 @@ def awaitControlRequests(conn: socket.socket, s: socket.socket, bind: str = "0.0
             conn.close()
             s.close()
             break
-        ts = time.strftime("%Y-%m-%d %H:%M:%S")
         # Trying to decode as UTF-8 and handling control request
         text = None
         try:
-            text = data.decode("utf-8")
-        except Exception:
-            pass
-        if text:
+            text = receiveSecureMessage(data.decode("utf-8"), encryption_key, hmac_key)
+            if not text: raise InvalidMessage("Empty control request")
             print("Control request received:", text)
             if controlRequestHandler(text, conn, s): break
+        except InvalidMessage as e:
+            print("Received invalid control message: ", e)
 
 
 
@@ -177,8 +214,10 @@ def main():
     awaitBroadcast()
     conn, s = connectControlSocket()
     # sharing encryption key
-    awaitEncryptionKeyExchange(conn, s)
-
+    master_key, encryption_key, hmac_key = awaitEncryptionKeyExchange(conn, s)
+    # handling control requests
+    if(master_key and encryption_key and hmac_key):
+        awaitControlRequests(conn, s, encryption_key, hmac_key)
     #awaitControlRequests(conn, s)
 
 if __name__ == "__main__":
