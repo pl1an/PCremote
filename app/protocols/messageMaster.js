@@ -38,7 +38,7 @@ const buildMessage = (
     const mac_input = CryptoJS.enc.Hex.parse(iv_hex + ciphertext_hex);
 
     const hmac = CryptoJS.HmacSHA256(mac_input, hmac_key).toString(CryptoJS.enc.Hex);
-    return `IV:${iv_hex} MESSAGE:${ciphertext_hex} HMAC:${hmac}`;
+    return `${iv_hex}|${ciphertext_hex}|${hmac}`;
 };
 
 

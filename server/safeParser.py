@@ -10,13 +10,9 @@ class InvalidMessage(Exception):
 
 
 # extract IV, ciphertext and HMAC from message string
-def parseMessage(packet: str):
+def parseMessage(packet: str) -> tuple[str, str, str]:
     try:
-        parts = packet.strip().split(" ")
-        iv_hex = parts[0].split("IV:")[1]
-        ciphertext_hex = parts[1].split("MESSAGE:")[1]
-        hmac_hex = parts[2].split("HMAC:")[1]
-        return iv_hex, ciphertext_hex, hmac_hex
+        return tuple(packet.strip().split("|"))
     except Exception:
         raise InvalidMessage("Malformed packet")
 
