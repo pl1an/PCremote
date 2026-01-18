@@ -1,9 +1,12 @@
 import socket
 import time
-import os
 import qrcode
-import secrets
 
+import os
+import win32clipboard
+import pyautogui
+
+import secrets
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
@@ -197,7 +200,21 @@ def controlRequestHandler(request: str, conn: socket.socket, s: socket.socket) -
         endComunication(conn, s)
         os.system("shutdown /s /t 0")
         return 1
-    pass
+    if(request == "COMMAND:KEYPRESS_ENTER"):
+        pyautogui.press("enter")
+        return 0
+    if(request == "COMMAND:KEYPRESS_BACKSPACE"):
+        pyautogui.press("backspace")
+        return 0
+    if(request.startswith("COMMAND:KEYPRESS<") and request.endswith(">")):
+        keys = request[len("COMMAND:KEYPRESS<"):-1]
+        win32clipboard.OpenClipboard()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardText(keys)
+        win32clipboard.CloseClipboard()
+        time.sleep(0.05)
+        pyautogui.hotkey("ctrl", "v") # copy-pasting via clipboard to support special characters
+        return 0
 
 
 

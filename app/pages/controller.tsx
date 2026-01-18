@@ -29,7 +29,7 @@ export const Controller: React.FC = () => {
 
     const [command, setCommand] = useState<"none"|"keyboard"|"mouse"|"load">("none");
     const keyboard_input_ref = useRef<TextInput | null>(null);
-    const [keyboardInput, setKeyboardInput] = useState<string>("");
+    const [keyboard_input, setKeyboardInput] = useState<string>("");
 
 
     useFocusEffect(useCallback(() => {
@@ -53,6 +53,7 @@ export const Controller: React.FC = () => {
     useFocusEffect(useCallback(() => {
         const subscription = Keyboard.addListener('keyboardDidHide', () => {
             if(command === "keyboard"){
+                setKeyboardInput("");
                 setCommand("none");
             }
         });
@@ -100,13 +101,28 @@ export const Controller: React.FC = () => {
                     <TextInput 
                         ref={keyboard_input_ref} 
                         cursorColor={themes.default.primary} style={style_sheet.text_input} 
-                        onChangeText={setKeyboardInput} value={keyboardInput}
+                        multiline={true} numberOfLines={1} value={keyboard_input}
+                        onChangeText={(new_text) =>{
+                            if(new_text.endsWith('\n')){
+                                new_text = new_text.slice(0, -1);
+                                sendControlSignal("COMMAND:KEYPRESS<" + new_text + ">");
+                                setKeyboardInput("");
+                                return;
+                            }
+                            setKeyboardInput(new_text);
+                        }}
                     />
                     <View style={{flexDirection: 'row', justifyContent: 'center', width: '80%'}}>
-                        <TouchableOpacity style={{...style_sheet.generic_button, width: '40%', marginTop: 30, marginRight: 10}} onPress={() => {}}>
+                        <TouchableOpacity 
+                            style={{...style_sheet.generic_button, width: '40%', marginTop: 30, marginRight: 10}} 
+                            onPress={() => sendControlSignal("COMMAND:KEYPRESS_BACKSPACE")}
+                        >
                             <MaterialDesignIcons name="keyboard-backspace" size={30} color={themes.default.primary} style={style_sheet.button_icon}/>
                         </TouchableOpacity>
-                        <TouchableOpacity style={{...style_sheet.generic_button, width: '40%', marginTop: 30}} onPress={() => {}}>
+                        <TouchableOpacity 
+                            style={{...style_sheet.generic_button, width: '40%', marginTop: 30}} 
+                            onPress={() => sendControlSignal("COMMAND:KEYPRESS_ENTER")}
+                        >
                             <MaterialDesignIcons name="keyboard-return" size={30} color={themes.default.primary} style={style_sheet.button_icon}/>
                         </TouchableOpacity>
                     </View>
