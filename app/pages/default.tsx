@@ -6,7 +6,7 @@ import { themes } from '../styles/themes';
 import dgram from 'react-native-udp';
 import TcpSocket from 'react-native-tcp-socket';
 import { Buffer } from 'buffer';
-import { useTcp } from '../contexts/tcpContext';
+import { useTcp, useConnectionStatus } from '../contexts/tcpContext';
 import QrcodeScanner from '../components/qrcodeScanner';
 import { useEncryptionKey, useHmacKey, useMasterKey } from '../contexts/secureKeyContext';
 
@@ -30,8 +30,8 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
 
     const udp_socket_ref = useRef<any>(null);
     const tcp_socket_ref = useTcp();
+    const { connection_status, setConnectionStatus } = useConnectionStatus();
 
-    const [connected, setConnected] = useState(false);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({
         show: false,
@@ -159,7 +159,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
                         console.warn('TCP context ref is null or not available');
                     }
                     setLoading(false);
-                    setConnected(true);
+                    setConnectionStatus("connected");
                     setWaitingForQr("Waiting camera button press");
                 }
             });
@@ -202,7 +202,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
             authenticationTimeout = setTimeout(() => {
                 setLoading(false);
                 setMessage({show: true, text: 'No authorization response from PC. Please try reconnecting.'});
-                setConnected(false);
+                setConnectionStatus("disconnected");
                 setWaitingForQr("Waiting connection");
             }, 5000);
         }
@@ -213,7 +213,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
         <View style={style_sheet.default_container}>
             <Text style={style_sheet.title}>Connect to your PC</Text>
             {message.show && <Text style={style_sheet.message_text}>{message.text}</Text>}
-            {!loading && waiting_for_qr === "Waiting connection" && !connected && (<>
+            {!loading && connection_status !== "connected" && (<>
                 <TouchableOpacity style={{...style_sheet.connect_button, marginTop: 60}} onPress={() => connectBroadcast()}>
                     <Text style={{color: themes['default'].primary, fontSize: 16}}> Connect through Broadcast </Text>
                 </TouchableOpacity>

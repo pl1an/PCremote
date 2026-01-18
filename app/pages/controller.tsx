@@ -1,14 +1,13 @@
-import React, { useRef, useState } from 'react';
-import { View, Text, Button, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, Button, StyleSheet, TouchableOpacity, TextInput, Keyboard } from 'react-native';
 import { Alert } from 'react-native';
 import { themes } from '../styles/themes';
 
-import dgram from 'react-native-udp';
-import TcpSocket from 'react-native-tcp-socket';
-import { Buffer } from 'buffer';
-import { useTcp } from '../contexts/tcpContext';
+import { useConnectionStatus, useTcp } from '../contexts/tcpContext';
 import { useEncryptionKey, useHmacKey } from '../contexts/secureKeyContext';
 import { buildMessage } from '../protocols/messageMaster';
+import { BackHandler } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons';
 //@ts-ignore
@@ -23,13 +22,51 @@ import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 
 export const Controller: React.FC = () => {
 
+    const { connection_status, setConnectionStatus } = useConnectionStatus();
     const tcp_socket_ref = useTcp();
-    
     const encryption_key_ref = useEncryptionKey(); 
     const hmac_key_ref = useHmacKey();
 
     const [command, setCommand] = useState<"none"|"keyboard"|"mouse"|"load">("none");
+    const keyboard_input_ref = useRef<TextInput | null>(null);
     const [keyboardInput, setKeyboardInput] = useState<string>("");
+
+
+    useFocusEffect(useCallback(() => {
+        const onBackPress = () => {
+            if(command !== "none"){
+                setCommand("none");
+                return true;
+            }
+            if(command === "none"){
+                sendControlSignal('COMMAND:DISCONNECT');
+                setConnectionStatus("disconnected");
+                return false;
+            }
+            return false;
+        }
+        const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => subscription.remove();
+    }, [command]));
+
+    // Listen for keyboard hide event to exit keyboard command mode
+    useFocusEffect(useCallback(() => {
+        const subscription = Keyboard.addListener('keyboardDidHide', () => {
+            if(command === "keyboard"){
+                setCommand("none");
+            }
+        });
+        return () => subscription.remove();
+    }, [command]));
+
+    // Focus the keyboard input when entering keyboard command mode
+    useEffect(() => {
+        setTimeout(() => {
+            if(command === "keyboard" && keyboard_input_ref.current){
+                keyboard_input_ref.current.focus();
+            }
+        }, 100);
+    }, [command]);
 
 
     const sendControlSignal = (signal: string) => {
@@ -44,7 +81,7 @@ export const Controller: React.FC = () => {
     return (
         <View style={style_sheet.container}>
             {command === "none" && (<>
-                <TouchableOpacity style={style_sheet.power_button} onPress={() => sendControlSignal('POWER_TOGGLE')}>
+                <TouchableOpacity style={style_sheet.power_button} onPress={() => sendControlSignal('COMMAND:POWER_TOGGLE')}>
                     <IonIcon name="power" size={70} color={themes.default.primary}/>
                 </TouchableOpacity>
                 <View>
@@ -60,7 +97,11 @@ export const Controller: React.FC = () => {
             </>)}
             {command === "keyboard" && (
                 <View style={style_sheet.text_input_container}>
-                    <TextInput style={style_sheet.text_input} onChangeText={setKeyboardInput} value={keyboardInput}></TextInput>
+                    <TextInput 
+                        ref={keyboard_input_ref} 
+                        cursorColor={themes.default.primary} style={style_sheet.text_input} 
+                        onChangeText={setKeyboardInput} value={keyboardInput}
+                    />
                     <View style={{flexDirection: 'row', justifyContent: 'center', width: '80%'}}>
                         <TouchableOpacity style={{...style_sheet.generic_button, width: '40%', marginTop: 30, marginRight: 10}} onPress={() => {}}>
                             <MaterialDesignIcons name="keyboard-backspace" size={30} color={themes.default.primary} style={style_sheet.button_icon}/>

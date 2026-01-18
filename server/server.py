@@ -162,7 +162,7 @@ def awaitControlRequests(
     bind: str = "0.0.0.0", port: int = 41234
 ):
     # waiting for control requests
-    print("Awaiting control requests...")
+    print("Awaiting control requests...\n")
     while True:
         # getting data from client
         data = conn.recv(65535)
@@ -176,7 +176,6 @@ def awaitControlRequests(
         try:
             text = receiveSecureMessage(data.decode("utf-8"), encryption_key, hmac_key)
             if not text: raise InvalidMessage("Empty control request")
-            print("Control request received:", text)
             if controlRequestHandler(text, conn, s): break
         except InvalidMessage as e:
             print("Received invalid control message: ", e)
@@ -185,12 +184,15 @@ def awaitControlRequests(
 
 # Returns 1 if should stop listening for control requests, 0 otherwise
 def controlRequestHandler(request: str, conn: socket.socket, s: socket.socket) -> int:
+    # Checking if control request is valid
+    if(request.startswith("COMMAND:") == False): return 0
+    # Handling control requests
     print("Handling control request:", request)
-    if(request == "END_CONNECTION"):
+    if(request == "COMMAND:DISCONNECT"):
         print("End connection request received.")
         endComunication(conn, s)
         return 1
-    if(request == "POWER_TOGGLE"):
+    if(request == "COMMAND:POWER_TOGGLE"):
         print("Power toggle request received.")
         endComunication(conn, s)
         os.system("shutdown /s /t 0")
@@ -218,7 +220,6 @@ def main():
     # handling control requests
     if(master_key and encryption_key and hmac_key):
         awaitControlRequests(conn, s, encryption_key, hmac_key)
-    #awaitControlRequests(conn, s)
 
 if __name__ == "__main__":
     main()

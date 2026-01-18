@@ -1,5 +1,10 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { TcpProvider } from "./contexts/tcpContext";
+import { SecureKeyProvider } from "./contexts/secureKeyContext";
+
 import { StyleSheet } from "react-native";
 import { themes } from "./styles/themes";
 
@@ -29,16 +34,22 @@ export default function RootLayout() {
     
 
     return (
-        <Stack.Navigator 
-            initialRouteName="default"
-            screenOptions={{
-                headerShown:false,
-                presentation: 'transparentModal',
-                contentStyle: style_sheet.container
-            }}
-        >
-            <Stack.Screen name="default" component={require("./pages/default").Default} />
-            <Stack.Screen name="controller" component={require("./pages/controller").Controller} />
-        </Stack.Navigator>
+        <SafeAreaProvider>
+            <TcpProvider>
+                <SecureKeyProvider>
+                    <Stack.Navigator 
+                        initialRouteName="default"
+                        screenOptions={{
+                            headerShown:false,
+                            presentation: 'transparentModal',
+                            contentStyle: style_sheet.container
+                        }}
+                    >
+                        <Stack.Screen name="default" component={require("./pages/default").Default} />
+                        <Stack.Screen name="controller" component={require("./pages/controller").Controller} />
+                    </Stack.Navigator>
+                </SecureKeyProvider>
+            </TcpProvider>
+        </SafeAreaProvider>
     );
 }
