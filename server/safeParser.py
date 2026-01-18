@@ -12,9 +12,11 @@ class InvalidMessage(Exception):
 # extract IV, ciphertext and HMAC from message string
 def parseMessage(packet: str) -> tuple[str, str, str]:
     try:
-        return tuple(packet.strip().split("|"))
-    except Exception:
-        raise InvalidMessage("Malformed packet")
+        parsed_packet = packet.strip().split("|")
+        if len(parsed_packet) != 3: raise InvalidMessage("Incorrect number of fields: " + str(parsed_packet))
+        return tuple(parsed_packet)
+    except Exception as e:
+        raise InvalidMessage("Malformed packet: " + str(e))
 
 
 # verify HMAC-SHA256(iv || ciphertext)

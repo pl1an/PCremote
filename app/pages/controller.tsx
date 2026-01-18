@@ -100,7 +100,7 @@ export const Controller: React.FC = () => {
                 <View style={style_sheet.text_input_container}>
                     <TextInput 
                         ref={keyboard_input_ref} 
-                        cursorColor={themes.default.primary} style={style_sheet.text_input} 
+                        cursorColor={themes.default.primary} style={style_sheet.text_input} autoCapitalize='none' 
                         multiline={true} numberOfLines={1} value={keyboard_input}
                         onChangeText={(new_text) =>{
                             if(new_text.endsWith('\n')){

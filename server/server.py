@@ -181,7 +181,7 @@ def awaitControlRequests(
             if not text: raise InvalidMessage("Empty control request")
             if controlRequestHandler(text, conn, s): break
         except InvalidMessage as e:
-            print("Received invalid control message: ", e)
+            print("Received invalid control message: " +  str(e))
 
 
 
@@ -192,7 +192,6 @@ def controlRequestHandler(request: str, conn: socket.socket, s: socket.socket) -
     # Handling control requests
     print("Handling control request:", request)
     if(request == "COMMAND:DISCONNECT"):
-        print("End connection request received.")
         endComunication(conn, s)
         return 1
     if(request == "COMMAND:POWER_TOGGLE"):
@@ -208,12 +207,19 @@ def controlRequestHandler(request: str, conn: socket.socket, s: socket.socket) -
         return 0
     if(request.startswith("COMMAND:KEYPRESS<") and request.endswith(">")):
         keys = request[len("COMMAND:KEYPRESS<"):-1]
-        win32clipboard.OpenClipboard()
-        win32clipboard.EmptyClipboard()
-        win32clipboard.SetClipboardText(keys)
-        win32clipboard.CloseClipboard()
-        time.sleep(0.05)
-        pyautogui.hotkey("ctrl", "v") # copy-pasting via clipboard to support special characters
+        # checking if there are special characters that pyautogui cannot type directly or accents that may not be typed correctly
+        accents = set('áàäâãåéèëêíìïîóòöôõúùüûçñÁÀÄÂÃÅÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛÇÑ')
+        special_characters = set('~!@#$%^&*()_+{}|:"<>?`-=[]\\;\',./" ')
+        if any((c in special_characters) for c in keys) or any((c in accents) for c in keys):
+            win32clipboard.OpenClipboard()
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardText(keys)
+            win32clipboard.CloseClipboard()
+            time.sleep(0.05)
+            pyautogui.hotkey("ctrl", "v") # copy-pasting via clipboard to support special characters
+        # typing normally otherwise
+        else:
+            pyautogui.typewrite(keys)
         return 0
 
 
@@ -222,7 +228,6 @@ def endComunication(conn: socket.socket, s: socket.socket):
     conn.sendall(b"END_CONNECTION")
     conn.close()
     s.close()
-    print("Ending connection...")
     pass
 
 
