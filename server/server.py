@@ -1,17 +1,8 @@
 import socket
 import time
-import qrcode
 
-import os
-import win32clipboard
-import pyautogui
-
-import secrets
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.backends import default_backend
-
-from safeParser import receiveSecureMessage, InvalidMessage
+from securityMaster import receiveSecureMessage, generateMasterKey, deriveKeys, generateEncryptionKeyQRCode, InvalidMessage
+from controlHandler import handleControlRequest, endComunication
 
 
 
@@ -53,10 +44,9 @@ def awaitBroadcast(bind: str = "0.0.0.0", port: int = 41234):
             return
 
 
-
 # establishes tcp control socket and awaits for client connection
 # returns tuple with (listening_socket, connection_socket)
-def connectControlSocket(bind: str = "0.0.0.0", port: int = 41234) -> tuple[socket.socket, socket.socket]:
+def awaitTcpConnection(bind: str = "0.0.0.0", port: int = 41234) -> tuple[socket.socket, socket.socket]:
 
     # creating and binding tcp socket to await for control requests 
     print("\nSetting up TCP socket...")
@@ -74,52 +64,6 @@ def connectControlSocket(bind: str = "0.0.0.0", port: int = 41234) -> tuple[sock
     # verifying client connection
     conn.sendall(b"CONFIRMED_CONNECTION")
     return conn, s
-
-
-
-# generates random master key
-def generateMasterKey(key_length: int = 16) -> tuple[str, str]:
-    print("Generating master kes...")
-    master_key = secrets.token_bytes(key_length).hex()
-    print("Master key generated:", master_key)
-    return master_key
-
-# generates QR code for encryption key
-def generateEncryptionKeyQRCode(key: str, filename: str = "encryption_key_qr.png"):
-    print("Generating QR code for master key...")
-    print("Scan this QR code with your mobile device to share the master key.\n")
-    qr = qrcode.QRCode(
-        version=None, 
-        border=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-    )
-    qr.add_data(key)
-    qr.make(fit=True)
-    qr.print_tty()
-
-# derives both encryption and hmac keys from master key using HKDF
-# returns tuple with (encryption_key, hmac_key)
-def deriveKeys(master_key_hex: str, key_lenght: int) -> tuple[str, str]:
-    master_key = bytes.fromhex(master_key_hex)
-    encryption_hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=key_lenght,
-        salt=b"PCREMOTE_SALT",
-        info=b"encryption",
-        backend=default_backend()
-    )
-    hmac_hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=key_lenght,
-        salt=b"PCREMOTE_SALT",
-        info=b"hmac",
-        backend=default_backend()
-    )
-    encryption_key = encryption_hkdf.derive(master_key).hex()
-    print("Encryption key derived: ", encryption_key)
-    hmac_key = hmac_hkdf.derive(master_key).hex()
-    print("HMAC key derived: ", hmac_key, "\n")
-    return encryption_key, hmac_key
 
 
 # awaits for encryption key exchange confirmation from client
@@ -166,7 +110,8 @@ def awaitControlRequests(
 ):
     # waiting for control requests
     print("Awaiting control requests...\n")
-    while True:
+    awaiting_control_requests = True
+    while awaiting_control_requests:
         # getting data from client
         data = conn.recv(65535)
         if not data: 
@@ -174,69 +119,26 @@ def awaitControlRequests(
             conn.close()
             s.close()
             break
-        # Trying to decode as UTF-8 and handling control request
-        text = None
         try:
-            text = receiveSecureMessage(data.decode("utf-8"), encryption_key, hmac_key)
-            if not text: raise InvalidMessage("Empty control request")
-            if controlRequestHandler(text, conn, s): break
-        except InvalidMessage as e:
+            buffer = ""
+            buffer += data.decode("utf-8")
+            while "\n" in buffer:
+                packet, buffer = buffer.split("\n", 1) 
+                text = receiveSecureMessage(packet, encryption_key, hmac_key)
+                if not text: raise InvalidMessage("Empty control request")
+                if handleControlRequest(text, conn, s): awaiting_control_requests = False
+        except Exception as e:
             print("Received invalid control message: " +  str(e))
 
 
 
-# Returns 1 if should stop listening for control requests, 0 otherwise
-def controlRequestHandler(request: str, conn: socket.socket, s: socket.socket) -> int:
-    # Checking if control request is valid
-    if(request.startswith("COMMAND:") == False): return 0
-    # Handling control requests
-    print("Handling control request:", request)
-    if(request == "COMMAND:DISCONNECT"):
-        endComunication(conn, s)
-        return 1
-    if(request == "COMMAND:POWER_TOGGLE"):
-        print("Power toggle request received.")
-        endComunication(conn, s)
-        os.system("shutdown /s /t 0")
-        return 1
-    if(request == "COMMAND:KEYPRESS_ENTER"):
-        pyautogui.press("enter")
-        return 0
-    if(request == "COMMAND:KEYPRESS_BACKSPACE"):
-        pyautogui.press("backspace")
-        return 0
-    if(request.startswith("COMMAND:KEYPRESS<") and request.endswith(">")):
-        keys = request[len("COMMAND:KEYPRESS<"):-1]
-        # checking if there are special characters that pyautogui cannot type directly or accents that may not be typed correctly
-        accents = set('áàäâãåéèëêíìïîóòöôõúùüûçñÁÀÄÂÃÅÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛÇÑ')
-        special_characters = set('~!@#$%^&*()_+{}|:"<>?`-=[]\\;\',./" ')
-        if any((c in special_characters) for c in keys) or any((c in accents) for c in keys):
-            win32clipboard.OpenClipboard()
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardText(keys)
-            win32clipboard.CloseClipboard()
-            time.sleep(0.05)
-            pyautogui.hotkey("ctrl", "v") # copy-pasting via clipboard to support special characters
-        # typing normally otherwise
-        else:
-            pyautogui.typewrite(keys)
-        return 0
-
-
-
-def endComunication(conn: socket.socket, s: socket.socket):
-    conn.sendall(b"END_CONNECTION")
-    conn.close()
-    s.close()
-    pass
-
-
 def main():
+    # starting server
     print("PC Remote")
     print("Starting server\n")
     # connecting to client
     awaitBroadcast()
-    conn, s = connectControlSocket()
+    conn, s = awaitTcpConnection()
     # sharing encryption key
     master_key, encryption_key, hmac_key = awaitEncryptionKeyExchange(conn, s)
     # handling control requests

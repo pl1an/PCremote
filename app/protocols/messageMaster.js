@@ -1,12 +1,12 @@
 import CryptoJS from 'crypto-js';
-import * as Random from 'expo-random';
+import * as ExpoCrypto from 'expo-crypto';
 
 
 // Encrypts plaintext using AES-256-CBC
 const encryptMessage = (message, encryption_key_hex) => {
     const key = CryptoJS.enc.Hex.parse(encryption_key_hex);
     // 128 bit IV
-    const ivBytes = Random.getRandomBytes(16); 
+    const ivBytes = ExpoCrypto.getRandomBytes(16); 
     const iv = CryptoJS.lib.WordArray.create(ivBytes);
     const encrypted = CryptoJS.AES.encrypt(
         message,
@@ -38,7 +38,7 @@ const buildMessage = (
     const mac_input = CryptoJS.enc.Hex.parse(iv_hex + ciphertext_hex);
 
     const hmac = CryptoJS.HmacSHA256(mac_input, hmac_key).toString(CryptoJS.enc.Hex);
-    return `${iv_hex}|${ciphertext_hex}|${hmac}`;
+    return `${iv_hex}|${ciphertext_hex}|${hmac}\n`;
 };
 
 

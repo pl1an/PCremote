@@ -16,6 +16,7 @@ import IonIcon from 'react-native-vector-icons/Ionicons';
 import EntypoIcon from 'react-native-vector-icons/Entypo';
 //@ts-ignore
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
+import Mousepad from '../components/mousepad';
 
 
 
@@ -68,6 +69,14 @@ export const Controller: React.FC = () => {
             }
         }, 100);
     }, [command]);
+
+
+    const onMouseMove = (x: number, y: number) => {
+        sendControlSignal("COMMAND:MOUSE_MOVE<" + x + "," + y + ">")
+    }
+    const onMouseClick = (x: number, y: number) => {
+        sendControlSignal("COMMAND:MOUSE_CLICK<" + x + "," + y + ">")
+    }
 
 
     const sendControlSignal = (signal: string) => {
@@ -126,6 +135,14 @@ export const Controller: React.FC = () => {
                             <MaterialDesignIcons name="keyboard-return" size={30} color={themes.default.primary} style={style_sheet.button_icon}/>
                         </TouchableOpacity>
                     </View>
+                </View>
+            )}
+            {command === "mouse" && (
+                <View style={style_sheet.mousepad_container}>
+                    <Mousepad
+                        onClick={(coordinates) => onMouseClick(coordinates.x, coordinates.y)}
+                        onMove={(coordinates) => onMouseMove(coordinates.x, coordinates.y)}
+                    />
                 </View>
             )}
         </View>
@@ -189,6 +206,14 @@ const style_sheet = StyleSheet.create({
         borderRadius: 10,
         paddingHorizontal: 10,
         color: themes.default.primary,
+    },
+    mousepad_container: {
+        position: 'relative',
+        height: '70%',
+        width: '90%',
+        borderWidth: 3,
+        borderColor: themes.default.secondary,
+        borderRadius: 10,
     },
 });
 
