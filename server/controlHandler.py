@@ -44,7 +44,7 @@ def handleControlRequest(request: str, conn, s) -> int:
     if(request == "COMMAND:DISCONNECT"):
         endComunication(conn, s)
         return 1
-    if(request == "COMMAND:POWER_TOGGLE"):
+    if(request == "COMMAND:SHUTDOWN"):
         handleShutdownRequest(conn, s)
         return 1
 

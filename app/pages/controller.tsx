@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Button, StyleSheet, TouchableOpacity, TextInput, Keyboard } from 'react-native';
 import { Alert } from 'react-native';
 import { themes } from '../styles/themes';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { useConnectionStatus, useTcp } from '../contexts/tcpContext';
 import { useEncryptionKey, useHmacKey } from '../contexts/secureKeyContext';
@@ -11,18 +12,21 @@ import { useFocusEffect } from '@react-navigation/native';
 
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons';
 //@ts-ignore
-import IonIcon from 'react-native-vector-icons/Ionicons';
-//@ts-ignore
 import EntypoIcon from 'react-native-vector-icons/Entypo';
 //@ts-ignore
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
 import Mousepad from '../components/mousepad';
+import Animated, { runOnJS } from 'react-native-reanimated';
+import { ShutdownButton } from '../components/shutdownButton';
 
 
 
+type ControllerProps = {
+    navigation: any;
+}
 
-export const Controller: React.FC = () => {
 
+export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
     const { connection_status, setConnectionStatus } = useConnectionStatus();
     const tcp_socket_ref = useTcp();
     const encryption_key_ref = useEncryptionKey(); 
@@ -42,7 +46,7 @@ export const Controller: React.FC = () => {
     const SCROLL_EVENT_INTERVAL = 1000 / MAX_SCROLL_EVENT_FREQUENCY;
     let pending_scroll_delta = 0;
     let last_scroll_event_time = 0;
-
+    
 
     useFocusEffect(useCallback(() => {
         const onBackPress = () => {
@@ -119,9 +123,11 @@ export const Controller: React.FC = () => {
     return (
         <View style={style_sheet.container}>
             {command === "none" && (<>
-                <TouchableOpacity style={style_sheet.power_button} onPress={() => sendControlSignal('COMMAND:POWER_TOGGLE')}>
-                    <IonIcon name="power" size={70} color={themes.default.primary}/>
-                </TouchableOpacity>
+                <ShutdownButton 
+                    sendControlSignal={sendControlSignal} 
+                    setConnectionStatus={setConnectionStatus} 
+                    navigation={navigation}
+                />
                 <View>
                     <TouchableOpacity style={{...style_sheet.generic_button, marginBottom: 30}} onPress={() => setCommand("keyboard")}>
                         <Text style={style_sheet.button_text} onPress={() => setCommand("keyboard")}>Keyboard</Text>
@@ -187,14 +193,6 @@ const style_sheet = StyleSheet.create({
         flex: 1,
         alignItems: 'center',
         justifyContent: 'space-evenly',
-    },
-    power_button: {
-        width: 100,
-        height: 100,
-        borderRadius: 100,
-        backgroundColor: "red",
-        alignItems: 'center',
-        justifyContent: 'center',
     },
     generic_button_container: {
         flex: 1,

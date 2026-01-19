@@ -7,6 +7,7 @@ import { SecureKeyProvider } from "./contexts/secureKeyContext";
 
 import { StyleSheet } from "react-native";
 import { themes } from "./styles/themes";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 
 export type RootStackParamList = {
@@ -35,21 +36,23 @@ export default function RootLayout() {
 
     return (
         <SafeAreaProvider>
-            <TcpProvider>
-                <SecureKeyProvider>
-                    <Stack.Navigator 
-                        initialRouteName="default"
-                        screenOptions={{
-                            headerShown:false,
-                            presentation: 'transparentModal',
-                            contentStyle: style_sheet.container
-                        }}
-                    >
-                        <Stack.Screen name="default" component={require("./pages/default").Default} />
-                        <Stack.Screen name="controller" component={require("./pages/controller").Controller} />
-                    </Stack.Navigator>
-                </SecureKeyProvider>
-            </TcpProvider>
+            <GestureHandlerRootView style={{flex:1}}>
+                <TcpProvider>
+                    <SecureKeyProvider>
+                        <Stack.Navigator 
+                            initialRouteName="default"
+                            screenOptions={{
+                                headerShown:false,
+                                presentation: 'transparentModal',
+                                contentStyle: style_sheet.container
+                            }}
+                        >
+                            <Stack.Screen name="default" component={require("./pages/default").Default} />
+                            <Stack.Screen name="controller" component={require("./pages/controller").Controller} />
+                        </Stack.Navigator>
+                    </SecureKeyProvider>
+                </TcpProvider>
+            </GestureHandlerRootView>
         </SafeAreaProvider>
     );
 }
