@@ -32,6 +32,17 @@ export const Controller: React.FC = () => {
     const keyboard_input_ref = useRef<TextInput | null>(null);
     const [keyboard_input, setKeyboardInput] = useState<string>("");
 
+    const MAX_MOUSE_EVENT_FREQUENCY = 20;
+    const MOUSE_EVENT_INTERVAL = 1000 / MAX_MOUSE_EVENT_FREQUENCY;
+    let pending_mouse_delta_x = 0;
+    let pending_mouse_delta_y = 0;
+    let last_mouse_event_time = 0;
+
+    const MAX_SCROLL_EVENT_FREQUENCY = 20;
+    const SCROLL_EVENT_INTERVAL = 1000 / MAX_SCROLL_EVENT_FREQUENCY;
+    let pending_scroll_delta = 0;
+    let last_scroll_event_time = 0;
+
 
     useFocusEffect(useCallback(() => {
         const onBackPress = () => {
@@ -72,11 +83,28 @@ export const Controller: React.FC = () => {
 
 
     const onMouseMove = (x: number, y: number) => {
-        sendControlSignal("COMMAND:MOUSE_MOVE<" + x + "," + y + ">")
+        pending_mouse_delta_x = x;
+        pending_mouse_delta_y = y;
+        const now = Date.now();
+        if(now - last_mouse_event_time >= MOUSE_EVENT_INTERVAL){
+            last_mouse_event_time = now;
+            sendControlSignal("COMMAND:MOUSE_MOVE<" + pending_mouse_delta_x + "," + pending_mouse_delta_y + ">")
+        }
     }
     const onMouseClick = (x: number, y: number) => {
         sendControlSignal("COMMAND:MOUSE_CLICK<" + x + "," + y + ">")
     }
+    const onMouseScroll = (x: number, y: number) => {
+        sendControlSignal("COMMAND:MOUSE_SCROLL<" + x + "," + y + ">")
+    }
+    const onMousePinch = (scale: number) => {
+        pending_scroll_delta = scale;
+        const now = Date.now();
+        if(now - last_scroll_event_time >= SCROLL_EVENT_INTERVAL){
+            last_scroll_event_time = now;
+            sendControlSignal("COMMAND:MOUSE_PINCH<" + scale + ">")
+        }
+    } 
 
 
     const sendControlSignal = (signal: string) => {
@@ -141,8 +169,11 @@ export const Controller: React.FC = () => {
                 <View style={style_sheet.mousepad_container}>
                     <Mousepad
                         onClick={(coordinates) => onMouseClick(coordinates.x, coordinates.y)}
+                        onScroll={(coordinates) => onMouseScroll(coordinates.x, coordinates.y)}
                         onMove={(coordinates) => onMouseMove(coordinates.x, coordinates.y)}
+                        onPinch={(scale) => onMousePinch(scale)}
                     />
+                    <MaterialIcon name="mouse" size={40} color={themes.default.primary} style={{...style_sheet.button_icon, bottom: 10}}/>
                 </View>
             )}
         </View>
