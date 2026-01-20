@@ -31,6 +31,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
     const udp_socket_ref = useRef<any>(null);
     const tcp_socket_ref = useTcp();
     const { connection_status, setConnectionStatus } = useConnectionStatus();
+    let broadcast_tries = 0;
 
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({
@@ -85,15 +86,23 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
 
             // Awaiting response
             closeTimeout = setTimeout(() => {
-                setLoading(false);
-                try{
-                    socket.close(); 
-                } 
-                catch (e){
-                    console.warn('UDP socket close error', e);
+                if(broadcast_tries < 5){
+                    broadcast_tries += 1;
+                    setMessage({show: true, text: `No response from PC. Retrying broadcast... (${broadcast_tries}/5)`});
+                    connectBroadcast();
                 }
-                udp_socket_ref.current = null;
-                setMessage({show: true, text: 'No response from PC. Please ensure the PC application is running and try again.'});
+                else{
+                    broadcast_tries = 0;
+                    setLoading(false);
+                    try{
+                        socket.close(); 
+                    } 
+                    catch (e){
+                        console.warn('UDP socket close error', e);
+                    }
+                    udp_socket_ref.current = null;
+                    setMessage({show: true, text: 'No response from PC. Please ensure the PC application is running and try again.'});
+                }
             }, 3000);
             socket.on('error', (err: any) => {
                 console.warn('UDP socket error', err);
