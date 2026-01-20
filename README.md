@@ -37,6 +37,8 @@ Download the server executable from the [releases page](https://github.com/pl1an
 ```bash
 server.exe
 ```
+Or simply double click the executable.
+IMPORTANT: Since it's a remote control application, most antiviruses will block it. Remember to create an exception for this executable.
 
 The server will start and listen for connections on your local network.
 
