@@ -9,15 +9,16 @@ import { useEncryptionKey, useHmacKey } from '../contexts/secureKeyContext';
 import { buildMessage } from '../protocols/messageMaster';
 import { BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import Mousepad from '../components/mousepad';
+import { ShutdownButton } from '../components/shutdownButton';
 
 import { MaterialDesignIcons } from '@react-native-vector-icons/material-design-icons';
+//@ts-ignore
+import FeatherIcon from 'react-native-vector-icons/Feather';
 //@ts-ignore
 import EntypoIcon from 'react-native-vector-icons/Entypo';
 //@ts-ignore
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
-import Mousepad from '../components/mousepad';
-import Animated, { runOnJS } from 'react-native-reanimated';
-import { ShutdownButton } from '../components/shutdownButton';
 
 
 
@@ -86,6 +87,18 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
     }, [command]);
 
 
+    // Listening for the keyboard height changes to adjust the UI accordingly
+    const [keyboard_height, setKeyboardHeight] = useState(0);
+    useEffect(() => {
+        const showSubscription = Keyboard.addListener('keyboardDidShow', (e) => {
+            setKeyboardHeight(e.endCoordinates.height);
+        });
+        return () => {
+            showSubscription.remove();
+        };
+    }, []);
+
+
     const onMouseMove = (x: number, y: number) => {
         pending_mouse_delta_x = x;
         pending_mouse_delta_y = y;
@@ -131,7 +144,7 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
                 <View>
                     <TouchableOpacity style={{...style_sheet.generic_button, marginBottom: 30}} onPress={() => setCommand("keyboard")}>
                         <Text style={style_sheet.button_text} onPress={() => setCommand("keyboard")}>Keyboard</Text>
-                        <EntypoIcon name="keyboard" size={40} color={themes.default.primary} style={style_sheet.button_icon}/>
+                        <EntypoIcon name="keyboard" size={40} color={themes.default.primary} style={{...style_sheet.button_icon, }}/>
                     </TouchableOpacity>
                     <TouchableOpacity style={style_sheet.generic_button} onPress={() => setCommand("mouse")}>
                         <Text style={style_sheet.button_text} onPress={() => setCommand("mouse")}>Mouse</Text>
@@ -157,16 +170,30 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
                     />
                     <View style={{flexDirection: 'row', justifyContent: 'center', width: '80%'}}>
                         <TouchableOpacity 
-                            style={{...style_sheet.generic_button, width: '40%', marginTop: 30, marginRight: 10}} 
-                            onPress={() => sendControlSignal("COMMAND:KEYPRESS_BACKSPACE")}
+                            style={{...style_sheet.generic_button, width: '40%', height: 60, marginTop: 30, marginRight: 10}} 
+                            onPress={() => sendControlSignal("COMMAND:VOLUME_DOWN")}
                         >
-                            <MaterialDesignIcons name="keyboard-backspace" size={30} color={themes.default.primary} style={style_sheet.button_icon}/>
+                            <FeatherIcon name="volume-1" size={30} color={themes.default.primary} style={{marginLeft: 8}}/>
                         </TouchableOpacity>
                         <TouchableOpacity 
-                            style={{...style_sheet.generic_button, width: '40%', marginTop: 30}} 
+                            style={{...style_sheet.generic_button, width: '40%', height: 60, marginTop: 30}} 
+                            onPress={() => sendControlSignal("COMMAND:VOLUME_UP")}
+                        >
+                            <FeatherIcon name="volume-2" size={30} color={themes.default.primary} style={{}}/>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={{flexDirection: 'row', justifyContent: 'space-between', width: '100%', position: 'absolute', bottom: keyboard_height}}>
+                        <TouchableOpacity 
+                            style={{...style_sheet.generic_button, width: '30%', marginBottom: 10}} 
+                            onPress={() => sendControlSignal("COMMAND:KEYPRESS_BACKSPACE")}
+                        >
+                            <MaterialDesignIcons name="keyboard-backspace" size={25} color={themes.default.primary} style={style_sheet.button_icon}/>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={{...style_sheet.generic_button, width: '30%', marginBottom: 10}} 
                             onPress={() => sendControlSignal("COMMAND:KEYPRESS_ENTER")}
                         >
-                            <MaterialDesignIcons name="keyboard-return" size={30} color={themes.default.primary} style={style_sheet.button_icon}/>
+                            <MaterialDesignIcons name="keyboard-return" size={25} color={themes.default.primary} style={style_sheet.button_icon}/>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -202,8 +229,7 @@ const style_sheet = StyleSheet.create({
     },
     generic_button: {
         position: 'relative',
-        width: '80%',
-        height: 60,
+        height: 45,
         padding: 15,
         borderRadius: 10,
         flexDirection: 'row',

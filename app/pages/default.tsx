@@ -77,8 +77,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
         try{
             // Sending message
             let closeTimeout: any
-            console.log('Sending broadcast message');
-            setMessage({show: true, text: 'Sending broadcast message to discover PC...'});
+            if(broadcast_tries == 0) setMessage({show: true, text: 'Sending broadcast message to discover PC...'});
             const message = Buffer.from('DISCOVER_PC');
             socket.send(message, 0, message.length, 41234, '255.255.255.255', (err: any) => {
                 if (err) console.warn('UDP send error', err);

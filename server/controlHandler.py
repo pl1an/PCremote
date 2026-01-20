@@ -76,6 +76,14 @@ def handleControlRequest(request: str, conn, s) -> int:
     if(request.startswith("COMMAND:MOUSE_PINCH<") and request.endswith(">")):
         handleMousePinchRequest(float(request[len("COMMAND:MOUSE_PINCH<"):-1]))
         return 0
+    
+    # Handling media requests
+    if(request == "COMMAND:VOLUME_UP"):
+        pyautogui.press("volumeup")
+        return 0
+    if(request == "COMMAND:VOLUME_DOWN"):
+        pyautogui.press("volumedown")
+        return 0
 
     return 0
 
