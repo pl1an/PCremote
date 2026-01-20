@@ -1,81 +1,119 @@
-# nativeTemplate — Simple Expo / React Native Layout
+# PCremote — Mobile Remote Controller for PC
 
-A minimal, file-based React Native app layout scaffolded with Expo. This README explains the repository structure, how the layout and routing are organized, and quick steps to run and extend the app.
+PCremote is a mobile remote control application that turns your phone into a wireless mouse and controller for your PC. Built with Expo and React Native, it communicates securely with a Python server running on your computer over your local network.
 
-**Live demo:** Local development via Expo (see Getting started).
+## Features
 
-**Stack:** Expo, React Native, TypeScript (config present), Expo Router (file-based routing)
+- **Wireless Control**: Use your phone as a touchpad/mouse for your PC
+- **Auto-Discovery**: Automatically finds your PC via broadcast on the same network
+- **Secure Communication**: All messages are HMAC-authenticated and encrypted
+- **Easy Setup**: Simple executable for the server, APK download for mobile
+- **Cross-Platform**: Works on Windows, with mobile support for Android
 
-## Project Overview
+## Security
 
-- **Purpose:** Provide a small, opinionated app layout that demonstrates a top-level layout, route pages, shared components, styles, and asset organization.
-- **Target audience:** Developers starting a new Expo app who want a compact, easy-to-read structure to extend.
+All communication between the mobile app and the server is secured with:
+- **HMAC Authentication**: Every message is authenticated to prevent tampering
+- **Encryption**: All data transmitted is encrypted in transit
 
-## Key Files & Layout
+Your connection is protected against unauthorized access and message interception.
 
-Top-level app directory layout (simplified):
+## Download
 
-- `app/` — primary app source (file-based routing)
-  - `_layout.tsx` — app shell / shared layout used by routes
-  - `index.tsx` — root route / entry screen
-  - `components/` — reusable UI components
-  - `pages/` — route pages (extra routes live here)
-  - `default.tsx` — fallback route or default content
-  - `styles/` — shared style tokens and global styles
-  - `types/` — shared TypeScript types
+Get the latest release:
 
-- `assets/` — images and static assets used by the app
+**[→ Download Latest Release](https://github.com/yourusername/PCremote/releases)**
 
-This layout favors clarity over complexity: the `_layout.tsx` defines common chrome (header, nav, safe-area) and each route file under `app/` becomes a navigable page.
+Each release includes:
+- Server executable for Windows
+- APK for Android installation
 
-## Getting started
+## Getting Started
 
-1. Install dependencies
+### 1. Install the Server
+
+Download the server executable from the [releases page](https://github.com/yourusername/PCremote/releases) and run it on your PC:
+
+```bash
+server.exe
+```
+
+The server will start and listen for connections on your local network.
+
+### 2. Install the Mobile App
+
+Download and install the APK from the [releases page](https://github.com/yourusername/PCremote/releases) on your Android device.
+
+### 3. Connect
+
+1. Make sure both your phone and PC are connected to the same Wi-Fi network
+2. Open the PCremote app on your phone
+3. Select "Connect trough Broadcast".
+4. Scan the QR code displayed on your PC screen to pair your devices.
+5. Start controlling your PC!
+
+## Development Setup
+
+If you want to build from source:
+
+### Server (Python)
+
+```bash
+cd server
+python server.py
+```
+
+### Mobile App (Expo)
 
 ```bash
 npm install
+npx expo prebuild --platform android
+npx expo run:android
 ```
 
-2. Start the Expo dev server
+This project only works with Expo bare workflow. 
+This project does not currently support iOS builds.
 
-```bash
-npx expo start
+## Future Updates
+
+Planned improvements for upcoming releases:
+
+1. **Improve mouse responsiveness** — Better tracking and smoother cursor movement
+2. **Add direct IP connection** — Manual IP entry for networks where broadcast doesn't work
+3. **Add right-click support** — Single-button direct click and context menu access
+4. **Design splash screen** — Polished loading screen with branding
+
+Have a feature request? [Open an issue](https://github.com/yourusername/PCremote/issues) to let us know!
+
+## Project Structure
+
 ```
-
-3. Open on device/emulator using the QR code or emulator options shown by Expo.
-
-Notes:
-- Use the Expo client, a simulator, or a development build for native modules.
-- The project uses file-based routing — add files under `app/` to create new routes.
-
-## Development tips
-
-- Add UI components to `app/components` and import them into routes or into `_layout.tsx`.
-- Keep global style tokens in `app/styles` and small per-component styles alongside components.
-- Put shared TypeScript interfaces in `app/types` to keep props and data shapes consistent.
-
-## Scripts
-
-- `npm install` — install dependencies
-- `npx expo start` — start the dev server
-
-(Other scripts from the original template remain available if present in `package.json`.)
-
-## Extending the Template
-
-- Add new routes: create `app/yourRoute.tsx` (or a folder with `index.tsx`).
-- Add nested layouts: create additional `_layout.tsx` files inside subfolders to scope layout behavior.
-- Add assets to `assets/images` and reference via `import` or `Expo.Asset`.
+PCremote/
+├── app/              # Expo mobile app source
+│   ├── components/   # Reusable UI components
+│   ├── contexts/     # React contexts (TCP, security)
+│   ├── pages/        # Screen components
+│   ├── protocols/    # Communication protocols
+│   └── styles/       # Theme and styling
+└── server/           # Python server source
+    ├── server.py     # Main server application
+    ├── securityMaster.py
+    └── controlHandler.py
+```
 
 ## Contributing
 
-Contributions are welcome for improvements and small examples. Open an issue or PR with changes.
+Contributions are welcome! Please feel free to submit issues and pull requests.
 
 ## License
 
-This template is provided as-is. Add a LICENSE file to clarify usage if you plan to publish.
+This project is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 
----
+**You are free to:**
+- Share — copy and redistribute the material in any medium or format
+- Adapt — remix, transform, and build upon the material
 
-README updated to document the simple app layout and how to work with the project. See the `app/` directory for route and layout code.
-"# PCremote" 
+**Under the following terms:**
+- **Attribution** — You must give appropriate credit
+- **NonCommercial** — You may not use the material for commercial purposes
+- **ShareAlike** — If you remix, transform, or build upon the material, you must distribute your contributions under the same license
