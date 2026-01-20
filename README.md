@@ -22,7 +22,7 @@ Your connection is protected against unauthorized access and message interceptio
 
 Get the latest release:
 
-**[→ Download Latest Release](https://github.com/yourusername/PCremote/releases)**
+**[→ Download Latest Release](https://github.com/pl1an/PCremote/releases)**
 
 Each release includes:
 - Server executable for Windows
@@ -32,7 +32,7 @@ Each release includes:
 
 ### 1. Install the Server
 
-Download the server executable from the [releases page](https://github.com/yourusername/PCremote/releases) and run it on your PC:
+Download the server executable from the [releases page](https://github.com/pl1an/PCremote/releases) and run it on your PC:
 
 ```bash
 server.exe
@@ -42,7 +42,7 @@ The server will start and listen for connections on your local network.
 
 ### 2. Install the Mobile App
 
-Download and install the APK from the [releases page](https://github.com/yourusername/PCremote/releases) on your Android device.
+Download and install the APK from the [releases page](https://github.com/pl1an/PCremote/releases) on your Android device.
 
 ### 3. Connect
 
@@ -83,7 +83,7 @@ Planned improvements for upcoming releases:
 3. **Add right-click support** — Single-button direct click and context menu access
 4. **Design splash screen** — Polished loading screen with branding
 
-Have a feature request? [Open an issue](https://github.com/yourusername/PCremote/issues) to let us know!
+Have a feature request? [Open an issue](https://github.com/pl1an/PCremote/issues) to let us know!
 
 ## Project Structure
 
