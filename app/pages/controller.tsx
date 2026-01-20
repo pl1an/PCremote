@@ -58,19 +58,26 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
     const pending_acks_ref = useRef<Map<string, any>>(new Map());
 
 
+    // Helper to clear all pending ACK timeouts
+    const clearAllPendingAcks = () => {
+        pending_acks_ref.current.forEach((timeout) => clearTimeout(timeout));
+        pending_acks_ref.current.clear();
+    };
+
     const sendControlSignal = (signal: string) => {
-        if(!tcp.socket_ref.current || !encryption_key_ref.current || !hmac_key_ref.current) return;
+        if(!encryption_key_ref.current || !hmac_key_ref.current) return;
         if(tcp.socket_ref.current == null){
-            tcp.startTcpConnection();
-            tcp.authenticateClient(connection.connection_address_ref.current!, encryption_key_ref, hmac_key_ref);
+            clearAllPendingAcks();
+            tcp.reconnectAndAuthenticate(encryption_key_ref, hmac_key_ref);
+            return;
         }
 
         // Setting up acknowledgment timeout
         const ack_timeout = setTimeout(() => {
             pending_acks_ref.current.delete(signal);
             console.log("Acknowledgment timeout for signal: " + signal);
-            tcp.startTcpConnection();
-            tcp.authenticateClient(connection.connection_address_ref.current!, encryption_key_ref, hmac_key_ref);
+            clearAllPendingAcks();
+            tcp.reconnectAndAuthenticate(encryption_key_ref, hmac_key_ref);
         }, 1000);
         pending_acks_ref.current.set(signal, ack_timeout);
 
@@ -81,8 +88,8 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
         }
         catch (e){
             if(e instanceof Error && (e.message.includes("Socket is closed") || e.message.includes("write EPIPE"))){
-                tcp.startTcpConnection();
-                tcp.authenticateClient(connection.connection_address_ref.current!, encryption_key_ref, hmac_key_ref);
+                clearAllPendingAcks();
+                tcp.reconnectAndAuthenticate(encryption_key_ref, hmac_key_ref);
             }
         }
     };
@@ -91,6 +98,7 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
     // Setting up listener for acknowledgments
     useEffect(() => {
         if(!tcp.socket_ref.current) return;
+        if(connection.connection_status !== "tcp-authenticated") return;
 
         const onData = (data: Buffer) => {
             tcp_buffer_ref.current += data.toString();
@@ -118,7 +126,7 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
         return () => {
             tcp.socket_ref.current?.off("data", onData);
         }
-    }, [tcp.socket_ref.current]);
+    }, [tcp.socket_ref.current, connection.connection_status]);
     
 
     useFocusEffect(useCallback(() => {
@@ -211,10 +219,6 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
                     <TouchableOpacity style={{...style_sheet.generic_button, width: '80%', height: 60}} onPress={() => setCommand("mouse")}>
                         <Text style={style_sheet.button_text} onPress={() => setCommand("mouse")}>Mouse</Text>
                         <MaterialIcon name="mouse" size={40} color={themes.default.primary} style={style_sheet.button_icon}/>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        style={{...style_sheet.generic_button, marginTop: 30, backgroundColor: themes.default.primary, width: '80%', height: 60}} 
-                        onPress={() => tcp.cleanupTcp()}>
                     </TouchableOpacity>
                 </View>
             </>)}

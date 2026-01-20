@@ -155,6 +155,12 @@ def main():
             awaitControlRequests(conn, s, encryption_key, hmac_key)
             break
         except ConnectionError:
+            # Close sockets before reconnecting
+            try:
+                conn.close()
+                s.close()
+            except Exception:
+                pass
             continue
 
 if __name__ == "__main__":

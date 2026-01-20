@@ -93,7 +93,6 @@ def handleControlRequest(request: str, conn, s) -> int:
 def endCommunication(conn, s):
     conn.close()
     s.close()
-    pass
 
 
 def handleShutdownRequest(conn, s):

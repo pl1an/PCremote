@@ -20,6 +20,7 @@ interface TcpHookReturnType {
     cleanupTcp: () => void;
     startTcpConnection: () => void;
     authenticateClient: (master_key: string, encryption_key_ref: React.RefObject<string | null>, hmac_key_ref: React.RefObject<string | null>) => void;
+    reconnectAndAuthenticate: (encryption_key_ref: React.RefObject<string | null>, hmac_key_ref: React.RefObject<string | null>) => void;
 }
 
 
@@ -36,6 +37,7 @@ export const useTcp = (props: TcpHookProps): TcpHookReturnType => {
     const tcp_tries_ref = useRef<number>(0);
     const tcp_retry_timeout_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
     const authentication_timeout_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const is_reconnecting_ref = useRef<boolean>(false);
 
 
     const cleanupTcp  = (destroy_socket: boolean = true) => {
@@ -108,11 +110,17 @@ export const useTcp = (props: TcpHookProps): TcpHookReturnType => {
         // setting up error listener
         tcp_socket_ref.current?.removeAllListeners("error");
         tcp_socket_ref.current?.on('error', (error: any) => {
-            console.warn('TCP socket error:', error);
-            tcp_tries_ref.current = 0;
-            props.setConnectionStatus("udp-disconnected");
-            props.setMessage({show: true, text: 'TCP connection error. Please try reconnecting.'});
-            cleanupTcp();
+            if(tcp_tries_ref.current < MAXIMUM_TCP_TRIES){
+                tcp_tries_ref.current += 1;
+                props.setMessage({show: true, text: `TCP connection error. Retrying... (${tcp_tries_ref.current}/${MAXIMUM_TCP_TRIES})`});
+                startTcpConnection();
+            }
+            else{
+                tcp_tries_ref.current = 0;
+                props.setConnectionStatus("udp-disconnected");
+                props.setMessage({show: true, text: 'Failed to establish TCP connection. Please try reconnecting.'});
+                cleanupTcp();
+            }
         });
         // setting up close listener
         tcp_socket_ref.current?.removeAllListeners("close");
@@ -171,10 +179,129 @@ export const useTcp = (props: TcpHookProps): TcpHookReturnType => {
     };
 
 
+    const reconnectAndAuthenticate = (encryption_key_ref: React.RefObject<string | null>, hmac_key_ref: React.RefObject<string | null>) => {
+        // Prevent multiple simultaneous reconnection attempts
+        if(is_reconnecting_ref.current) {
+            console.log('Reconnection already in progress, skipping...');
+            return;
+        }
+        is_reconnecting_ref.current = true;
+        
+        cleanupTcp();
+        props.setConnectionStatus("tcp-loading");
+
+        if(!props.address_ref.current){
+            console.warn('No address to connect to for TCP reconnection');
+            props.setConnectionStatus("udp-disconnected");
+            is_reconnecting_ref.current = false;
+            return;
+        }
+
+        console.log('Reconnecting to TCP server at', props.address_ref.current);
+        const currentSocket = TcpSocket.createConnection({
+            host: props.address_ref.current,
+            port: 41235, 
+        }, () => {
+            // Verify this is still the current socket
+            if(tcp_socket_ref.current !== currentSocket) {
+                console.log('Socket was replaced, ignoring stale connection callback');
+                return;
+            }
+            console.log('TCP reconnected. Re-authenticating...');
+            // Clear retry timeout on successful connection
+            if(tcp_retry_timeout_ref.current){
+                clearTimeout(tcp_retry_timeout_ref.current);
+                tcp_retry_timeout_ref.current = null;
+            }
+            // Send authentication message
+            if(!encryption_key_ref.current || !hmac_key_ref.current) {
+                is_reconnecting_ref.current = false;
+                return;
+            }
+            props.setConnectionStatus("tcp-authenticating");
+            const message = buildMessage('MASTER_KEY_RECEIVED', encryption_key_ref.current, hmac_key_ref.current);
+            console.log('Sending re-authentication message');
+            currentSocket.write(message);
+        });
+        tcp_socket_ref.current = currentSocket;
+
+        // Creating timeout for connection retries
+        tcp_retry_timeout_ref.current = setTimeout(() => {
+            if(tcp_tries_ref.current < MAXIMUM_TCP_TRIES){
+                tcp_tries_ref.current += 1;
+                is_reconnecting_ref.current = false; // Allow retry
+                reconnectAndAuthenticate(encryption_key_ref, hmac_key_ref);
+            }
+            else{
+                tcp_tries_ref.current = 0;
+                is_reconnecting_ref.current = false;
+                props.setConnectionStatus("udp-disconnected");
+                cleanupTcp();
+            }
+        }, MAXIMUM_TCP_CONNECTION_TIME_MS);
+
+        // Setting up data listener for authentication confirmation
+        currentSocket.on('data', (data: any) => {
+            if(tcp_socket_ref.current !== currentSocket) return;
+            try{
+                const message_received = receiveSecureMessage(data.toString(), encryption_key_ref.current, hmac_key_ref.current);
+                if(message_received === "CLIENT_AUTHENTICATED"){
+                    console.log('Re-authentication successful');
+                    props.setConnectionStatus("tcp-authenticated");
+                    tcp_tries_ref.current = 0;
+                    is_reconnecting_ref.current = false;
+                    if(tcp_retry_timeout_ref.current){
+                        clearTimeout(tcp_retry_timeout_ref.current);
+                        tcp_retry_timeout_ref.current = null;
+                    }
+                }
+            }
+            catch (e){
+                console.warn('Failed to parse authentication response:', e);
+            }
+        });
+
+        // Setting up error listener - trigger retry on error
+        currentSocket.on('error', (error: any) => {
+            if(tcp_socket_ref.current !== currentSocket) return;
+            console.warn('TCP socket error during reconnection:', error);
+            // Clear the timeout since we'll handle retry here
+            if(tcp_retry_timeout_ref.current){
+                clearTimeout(tcp_retry_timeout_ref.current);
+                tcp_retry_timeout_ref.current = null;
+            }
+            // Retry logic
+            if(tcp_tries_ref.current < MAXIMUM_TCP_TRIES){
+                tcp_tries_ref.current += 1;
+                console.log(`Retrying connection... (${tcp_tries_ref.current}/${MAXIMUM_TCP_TRIES})`);
+                is_reconnecting_ref.current = false;
+                // Delay before retry to avoid hammering the server
+                setTimeout(() => {
+                    reconnectAndAuthenticate(encryption_key_ref, hmac_key_ref);
+                }, 1000);
+            }
+            else{
+                tcp_tries_ref.current = 0;
+                is_reconnecting_ref.current = false;
+                props.setConnectionStatus("udp-disconnected");
+                cleanupTcp();
+            }
+        });
+
+        // Setting up close listener
+        currentSocket.on('close', () => {
+            if(tcp_socket_ref.current !== currentSocket) return;
+            console.log('TCP connection closed during reconnection');
+            // Don't retry on close - the error handler will handle it if there was an error
+        });
+    };
+
+
     return {
         socket_ref: tcp_socket_ref,
         cleanupTcp,
         startTcpConnection,
-        authenticateClient
+        authenticateClient,
+        reconnectAndAuthenticate
     };
 }
