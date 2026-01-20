@@ -1,11 +1,11 @@
 import secrets
+import os
+import hmac
+import hashlib
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import hashes, padding
 from cryptography.hazmat.backends import default_backend
-import hmac
-import hashlib
-
 import qrcode
 
 
@@ -59,6 +59,38 @@ def deriveKeys(master_key_hex: str, key_lenght: int) -> tuple[str, str]:
     hmac_key = hmac_hkdf.derive(master_key).hex()
     print("HMAC key derived: ", hmac_key, "\n")
     return encryption_key, hmac_key
+
+
+
+# encrypts plaintext using AES-256-CBC
+def encryptMessage(message: str, encryption_key_hex: str) -> tuple[str, str]:
+    key = bytes.fromhex(encryption_key_hex)
+    if len(key) != 32: raise ValueError("Encryption key must be 32 bytes (AES-256)")
+    # 128-bit IV
+    iv = os.urandom(16)
+    # PKCS7 padding (128-bit block size)
+    padder = padding.PKCS7(128).padder()
+    padded_plaintext = padder.update(message.encode("utf-8")) + padder.finalize()
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
+    return iv.hex(), ciphertext.hex()
+
+
+# builds and encrypts a message with HMAC authentication
+def buildMessage(
+    message: str,
+    encryption_key_hex: str,
+    hmac_key_hex: str
+) -> str:
+    iv_hex, ciphertext_hex = encryptMessage(
+        message,
+        encryption_key_hex
+    )
+    mac_input = bytes.fromhex(iv_hex + ciphertext_hex)
+    hmac_key = bytes.fromhex(hmac_key_hex)
+    mac = hmac.new(hmac_key, mac_input, hashlib.sha256).hexdigest()
+    return f"{iv_hex}|{ciphertext_hex}|{mac}\n"
 
 
 

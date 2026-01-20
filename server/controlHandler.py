@@ -91,7 +91,6 @@ def handleControlRequest(request: str, conn, s) -> int:
 
 # Ends the communication by sending END_CONNECTION message and closing sockets
 def endCommunication(conn, s):
-    conn.sendall(b"END_CONNECTION")
     conn.close()
     s.close()
     pass

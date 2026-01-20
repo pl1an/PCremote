@@ -6,7 +6,7 @@ import { themes } from '../styles/themes';
 import dgram from 'react-native-udp';
 import TcpSocket from 'react-native-tcp-socket';
 import { Buffer } from 'buffer';
-import { useTcp, useConnectionStatus } from '../contexts/tcpContext';
+import { useTcp, useConnectionStatus, useConnectionAddress } from '../contexts/tcpContext';
 import QrcodeScanner from '../components/qrcodeScanner';
 import { useEncryptionKey, useHmacKey, useMasterKey } from '../contexts/secureKeyContext';
 
@@ -15,10 +15,12 @@ import LoadingAnimation from '../components/loadingAnimation';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../_layout';
 
-//@ts-expect-error
-import Icon from 'react-native-vector-icons/Ionicons';
 import { deriveKeys } from '../protocols/deriveMaster';
 import { buildMessage } from '../protocols/sendMaster';
+import { receiveSecureMessage } from '../protocols/receiveMaster';
+
+//@ts-expect-error
+import Icon from 'react-native-vector-icons/Ionicons';
 
 
 
@@ -32,6 +34,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
     const MAXIMUM_BROADCAST_TRIES = 5;
     const udp_socket_ref = useRef<any>(null);
     const broadcast_tries_ref = useRef(0);
+    const udp_retry_timeout_ref = useRef<any>(null);
 
     const MAXIMUM_TCP_TRIES = 5;
     const tcp_socket_ref = useTcp();
@@ -39,6 +42,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
     const tcp_retry_timeout_ref = useRef<any>(null);
 
     const { connection_status, setConnectionStatus } = useConnectionStatus();
+    const connection_address_ref = useConnectionAddress();
 
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({
@@ -53,30 +57,45 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
     const encryption_key_ref = useEncryptionKey();
 
 
-    const connectBroadcast = () => {
-        setLoading(true);
+    const cleanupUdp  = () => {
+        if(udp_retry_timeout_ref.current){
+            clearTimeout(udp_retry_timeout_ref.current);
+            udp_retry_timeout_ref.current = null;
+        }
+        if(broadcast_tries_ref.current > 0){
+            broadcast_tries_ref.current = 0;
+        }
+        if(udp_socket_ref.current){
+            try{
+                udp_socket_ref.current.removeAllListeners();
+                udp_socket_ref.current.close();
+                udp_socket_ref.current = null;
+            }
+            catch (e){
+                console.warn('Failed to cleanup UDP socket', e);
+            }
+        }
+    };
 
+    const connectBroadcast = () => {
+        cleanupUdp();
+        setLoading(true);
         // Tries to create a UDP socket
         let socket: any;
-        if(udp_socket_ref.current){
-            socket = udp_socket_ref.current;
+        try{
+            console.log('Creating UDP socket');
+            //@ts-ignore
+            socket = dgram.createSocket('udp4');
+            socket.bind(0, () => {});
+            udp_socket_ref.current = socket;
         }
-        else{
-            try{
-                console.log('Creating UDP socket');
-                //@ts-ignore
-                socket = dgram.createSocket('udp4');
-                socket.bind(0, () => {});
-                udp_socket_ref.current = socket;
-            }
-            catch (err){
-                Alert.alert(
-                    'UDP unavailable or bind failed',
-                    'Failed to initialize UDP socket. The native UDP module appears unavailable in this environment.'
-                );
-                console.warn('error creating and binding socket ', err);
-                return;
-            }
+        catch (err){
+            Alert.alert(
+                'UDP unavailable or bind failed',
+                'Failed to initialize UDP socket. The native UDP module appears unavailable in this environment.'
+            );
+            console.warn('error creating and binding socket ', err);
+            return;
         }
 
         // Sending a broadcast message to discover the PC
@@ -90,43 +109,33 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
                 if (err) console.warn('UDP send error', err);
             });
 
-            // Awaiting response
-            closeTimeout = setTimeout(() => {
-                if(broadcast_tries_ref.current < 5){
+            // Creating broadcast retry timeout
+            udp_retry_timeout_ref.current = setTimeout(() => {
+                if(broadcast_tries_ref.current < MAXIMUM_BROADCAST_TRIES){
                     broadcast_tries_ref.current += 1;
-                    setMessage({show: true, text: `No response from PC. Retrying broadcast... (${broadcast_tries_ref.current}/5)`});
+                    setMessage({show: true, text: `No response from PC. Retrying broadcast... (${broadcast_tries_ref.current}/${MAXIMUM_BROADCAST_TRIES})`});
                     connectBroadcast();
                 }
                 else{
                     broadcast_tries_ref.current = 0;
                     setLoading(false);
-                    try{
-                        socket.close(); 
-                    } 
-                    catch (e){
-                        console.warn('UDP socket close error', e);
-                    }
-                    udp_socket_ref.current = null;
                     setMessage({show: true, text: 'No response from PC. Please ensure the PC application is running and try again.'});
+                    cleanupUdp();
                 }
             }, 3000);
+
+            // Setting socket listeners
             socket.on('error', (err: any) => {
                 console.warn('UDP socket error', err);
                 setLoading(false);
-                try{
-                    socket.close();
-                }
-                catch (e){
-                    console.warn('UDP socket close error', e);
-                }
-                if (closeTimeout) clearTimeout(closeTimeout);
-                udp_socket_ref.current = null;
+                cleanupUdp();
             });
             socket.on('message', (msg: any, rinfo: any) => {
                 if(msg.toString() === "PC_HERE"){
-                    if (closeTimeout) clearTimeout(closeTimeout);
                     console.log('PC found:', msg.toString(), rinfo && rinfo.address);
                     setMessage({show: true, text: 'PC found at ' + rinfo.address + '. Establishing TCP connection...'});
+                    cleanupUdp();
+                    connection_address_ref.current = rinfo.address;
                     stablishTcpConnection(rinfo.address);
                 };
             });
@@ -181,7 +190,6 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
         // wait for confirmation from server
         server.on('data', (data) => {
             if(data.toString() === "CONFIRMED_CONNECTION"){
-                setMessage({show: true, text: 'Scan the QR code on your PC to share the encryption key.'});
                 if (tcp_socket_ref && typeof tcp_socket_ref === 'object') {
                     try {
                         tcp_socket_ref.current = server;
@@ -201,6 +209,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
                 setLoading(false);
                 setConnectionStatus("connected");
                 setWaitingForQr("Waiting camera button press");
+                setMessage({show: true, text: 'Scan the QR code on your PC to share the encryption key.'});
             }
         });
         // Creating timeout for connection retries
@@ -245,12 +254,22 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
             // Await for authorization from server
             let authenticationTimeout: any;
             tcp_socket_ref.current.on('data', (data: any) => {
-                if(data.toString() === "CLIENT_AUTHENTICATED"){
-                    console.log('Authentication confirmed by server. Navigating to controller.');
-                    setLoading(false);
-                    setMessage({show: false, text: ''});
-                    if (authenticationTimeout) clearTimeout(authenticationTimeout);
-                    navigation.navigate('controller');
+                try{
+                    const message_received = receiveSecureMessage(data.toString(), encryption_key_ref.current, hmac_key_ref.current);
+                    if(message_received === "CLIENT_AUTHENTICATED"){
+                        console.log('Authentication confirmed by server. Navigating to controller.');
+                        setLoading(false);
+                        setMessage({show: false, text: ''});
+                        tcp_socket_ref.current.removeAllListeners();
+                        tcp_tries_ref.current = 0;
+                        tcp_retry_timeout_ref.current = null;
+                        broadcast_tries_ref.current = 0;
+                        if (authenticationTimeout) clearTimeout(authenticationTimeout);
+                        navigation.navigate('controller');
+                    }
+                }
+                catch (e){
+                    console.warn('Failed to receive or parse authentication message from server:', e);
                 }
             });
             // Setting timeout for server response

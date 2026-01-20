@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { use, useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Button, StyleSheet, TouchableOpacity, TextInput, Keyboard } from 'react-native';
 import { Alert } from 'react-native';
 import { themes } from '../styles/themes';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import TcpSocket from 'react-native-tcp-socket';
 
-import { useConnectionStatus, useTcp } from '../contexts/tcpContext';
+import { useConnectionAddress, useConnectionStatus, useTcp } from '../contexts/tcpContext';
 import { useEncryptionKey, useHmacKey } from '../contexts/secureKeyContext';
 import { buildMessage } from '../protocols/sendMaster';
 import { BackHandler } from 'react-native';
@@ -19,6 +20,8 @@ import FeatherIcon from 'react-native-vector-icons/Feather';
 import EntypoIcon from 'react-native-vector-icons/Entypo';
 //@ts-ignore
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
+import { receiveSecureMessage } from '../protocols/receiveMaster';
+import { goBack } from 'expo-router/build/global-state/routing';
 
 
 
@@ -28,10 +31,13 @@ type ControllerProps = {
 
 
 export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
+
     const { connection_status, setConnectionStatus } = useConnectionStatus();
     const tcp_socket_ref = useTcp();
+    const connection_address_ref = useConnectionAddress();
     const encryption_key_ref = useEncryptionKey(); 
     const hmac_key_ref = useHmacKey();
+    const tcp_buffer_ref = useRef("");
 
     const [command, setCommand] = useState<"none"|"keyboard"|"mouse"|"load">("none");
     const keyboard_input_ref = useRef<TextInput | null>(null);
@@ -47,6 +53,140 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
     const SCROLL_EVENT_INTERVAL = 1000 / MAX_SCROLL_EVENT_FREQUENCY;
     let pending_scroll_delta = 0;
     let last_scroll_event_time = 0;
+
+    const pending_acks_ref = useRef<Map<string, any>>(new Map());
+
+
+    const cleanupTcp  = () => {
+        if(tcp_socket_ref && tcp_socket_ref.current){
+            try{
+                tcp_socket_ref.current.removeAllListeners();
+                tcp_socket_ref.current.destroy();
+                tcp_socket_ref.current = null;
+            }
+            catch (e){
+                console.warn('Failed to cleanup TCP socket', e);
+            }
+        }
+    };
+
+    const stablishTcpConnection = (address:any) => {
+        cleanupTcp();
+        const server = TcpSocket.createConnection({
+            host: address,
+            port: 41234, 
+        }, () => {
+            console.log('TCP connected. Awaiting key sharing...');
+        });
+        if(tcp_socket_ref) tcp_socket_ref.current = server;
+        // wait for confirmation from server
+        server.on('data', (data) => {
+            if(data.toString() === "CONFIRMED_CONNECTION"){
+                if (tcp_socket_ref && typeof tcp_socket_ref === 'object') {
+                    try {
+                        tcp_socket_ref.current = server;
+                    }
+                    catch (e) {
+                        console.warn('Failed to set tcp ref current', e);
+                    }
+                }
+                else {
+                    console.warn('TCP context ref is null or not available');
+                }
+                // Connection established successfully and destroying retry timeout
+                setConnectionStatus("connected");
+                reconfirmMasterKey();
+            }
+        });
+    };
+
+    const reconfirmMasterKey = () => {
+        // Sending confirmation to server
+        if(tcp_socket_ref.current){
+            const message = buildMessage('MASTER_KEY_RECEIVED', encryption_key_ref.current, hmac_key_ref.current);
+            console.log('Building authentication message and sending: ', message); 
+            tcp_socket_ref.current.write(message);
+            // Await for authorization from server
+            let authenticationTimeout: any;
+            tcp_socket_ref.current.on('data', (data: any) => {
+                try{
+                    const message_received = receiveSecureMessage(data.toString(), encryption_key_ref.current, hmac_key_ref.current);
+                    if(message_received === "CLIENT_AUTHENTICATED" && authenticationTimeout){
+                        clearTimeout(authenticationTimeout);
+                    }
+                }
+                catch (e){
+                    console.warn('Failed to receive or parse authentication message from server:', e);
+                }
+            });
+            // Setting timeout for server response
+            authenticationTimeout = setTimeout(() => {
+                cleanupTcp();
+                setConnectionStatus("disconnected");
+                navigation.goBack();
+            }, 5000);
+        }
+    };
+
+    const sendControlSignal = (signal: string) => {
+        if(tcp_socket_ref.current == null){
+            stablishTcpConnection(connection_address_ref.current);
+        }
+        if(tcp_socket_ref.current && encryption_key_ref.current && hmac_key_ref.current){
+            // Setting up acknowledgment timeout
+            const ack_timeout = setTimeout(() => {
+                pending_acks_ref.current.delete(signal);
+                console.log("Acknowledgment timeout for signal: " + signal);
+                stablishTcpConnection(connection_address_ref.current);
+            }, 1000);
+            pending_acks_ref.current.set(signal, ack_timeout);
+            // Sending message
+            const message = buildMessage(signal, encryption_key_ref.current, hmac_key_ref.current);
+            try{
+                tcp_socket_ref.current.write(message);
+            }
+            catch (e){
+                if(e instanceof Error && (e.message.includes("Socket is closed") || e.message.includes("write EPIPE"))){
+                    stablishTcpConnection(connection_address_ref.current);
+                }
+            }
+        }
+    };
+
+
+    // Setting up listener for acknowledgments
+    useEffect(() => {
+        if(!tcp_socket_ref.current) return;
+
+        const onData = (data: Buffer) => {
+            tcp_buffer_ref.current += data.toString();
+            while(tcp_buffer_ref.current.includes("\n")){
+                let current_packet = tcp_buffer_ref.current.split("\n")[0];
+                tcp_buffer_ref.current = tcp_buffer_ref.current.slice(current_packet.length + 1);
+                const message = receiveSecureMessage(current_packet, encryption_key_ref.current!, hmac_key_ref.current!);
+                if(!message || !message.startsWith("ACK:")) return;
+                const original_signal = message.slice(4);
+                if(pending_acks_ref.current.has(original_signal)){
+                    clearTimeout(pending_acks_ref.current.get(original_signal));
+                    pending_acks_ref.current.delete(original_signal);
+                    // Handling specific acknowledgments
+                    if(original_signal === "COMMAND:DISCONNECT"){
+                        tcp_socket_ref.current.removeAllListeners();
+                        tcp_socket_ref.current.destroy();
+                        tcp_socket_ref.current = null;
+                        setConnectionStatus("disconnected");
+                        navigation.goBack();
+                    }
+                }
+            }
+
+        }
+
+        tcp_socket_ref.current.on('data', onData);
+        return () => {
+            tcp_socket_ref.current?.off("data", onData);
+        }
+    }, [tcp_socket_ref.current]);
     
 
     useFocusEffect(useCallback(() => {
@@ -57,8 +197,7 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
             }
             if(command === "none"){
                 sendControlSignal('COMMAND:DISCONNECT');
-                setConnectionStatus("disconnected");
-                return false;
+                return true;
             }
             return false;
         }
@@ -124,15 +263,6 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
     } 
 
 
-    const sendControlSignal = (signal: string) => {
-        if(tcp_socket_ref.current && encryption_key_ref.current && hmac_key_ref.current){
-            const message = buildMessage(signal, encryption_key_ref.current, hmac_key_ref.current);
-            console.log("Sending control signal:", message);
-            tcp_socket_ref.current.write(message);
-        }
-    };
-
-
     return (
         <View style={style_sheet.container}>
             {command === "none" && (<>
@@ -149,6 +279,10 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
                     <TouchableOpacity style={{...style_sheet.generic_button, width: '80%', height: 60}} onPress={() => setCommand("mouse")}>
                         <Text style={style_sheet.button_text} onPress={() => setCommand("mouse")}>Mouse</Text>
                         <MaterialIcon name="mouse" size={40} color={themes.default.primary} style={style_sheet.button_icon}/>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={{...style_sheet.generic_button, marginTop: 30, backgroundColor: themes.default.primary, width: '80%', height: 60}} 
+                        onPress={() => cleanupTcp()}>
                     </TouchableOpacity>
                 </View>
             </>)}

@@ -1,7 +1,6 @@
 import socket
 import time
-
-from securityMaster import receiveSecureMessage, generateMasterKey, deriveKeys, generateEncryptionKeyQRCode, InvalidMessage
+from securityMaster import receiveSecureMessage, generateMasterKey, deriveKeys, generateEncryptionKeyQRCode, InvalidMessage, buildMessage
 from controlHandler import handleControlRequest, endCommunication
 
 
@@ -91,7 +90,8 @@ def awaitMasterKeyExchange(conn: socket.socket, s: socket.socket, encryption_key
         try:
             text = receiveSecureMessage(data.decode("utf-8"), encryption_key, hmac_key)
             if text == "MASTER_KEY_RECEIVED":
-                conn.sendall(b"CLIENT_AUTHENTICATED")
+                authentication_message = buildMessage("CLIENT_AUTHENTICATED", encryption_key, hmac_key)
+                conn.sendall(authentication_message.encode("utf-8"))
                 print("Client authenticated successfully.\n")
                 return True
             else:
@@ -126,6 +126,9 @@ def awaitControlRequests(
                 packet, buffer = buffer.split("\n", 1) 
                 text = receiveSecureMessage(packet, encryption_key, hmac_key)
                 if not text: raise InvalidMessage("Empty control request")
+                # sending acknowledgment
+                conn.sendall(buildMessage("ACK:" + text, encryption_key, hmac_key).encode("utf-8"))
+                # handling control request
                 if handleControlRequest(text, conn, s): awaiting_control_requests = False
         except Exception as e:
             print("Received invalid control message: " +  str(e))
