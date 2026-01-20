@@ -7,12 +7,13 @@ import { themes } from '../styles/themes';
 //@ts-ignore
 import IonIcon from 'react-native-vector-icons/Ionicons';
 import { LongPressProgressRing } from './longPressProgressRing';
+import { ConnectionStatusContextType } from '../contexts/connectionStatusContext';
 
 
 
 interface ShutdownButtonProps {
     sendControlSignal: (command: string) => void;
-    setConnectionStatus: (status: string) => void;
+    setConnectionStatus: (status: ConnectionStatusContextType["connection_status"]) => void;
     navigation: any;
 }
 
@@ -24,7 +25,7 @@ export const ShutdownButton = (props: ShutdownButtonProps) => {
 
     const handleShutdown = useCallback(() => {
         props.sendControlSignal('COMMAND:SHUTDOWN');
-        props.setConnectionStatus("disconnected");
+        props.setConnectionStatus("udp-disconnected");
         props.navigation.navigate("default");
     }, [props]);
 

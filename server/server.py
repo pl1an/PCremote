@@ -45,7 +45,7 @@ def awaitBroadcast(bind: str = "0.0.0.0", port: int = 41234):
 
 # establishes tcp control socket and awaits for client connection
 # returns tuple with (listening_socket, connection_socket)
-def awaitTcpConnection(bind: str = "0.0.0.0", port: int = 41234) -> tuple[socket.socket, socket.socket]:
+def awaitTcpConnection(bind: str = "0.0.0.0", port: int = 41235) -> tuple[socket.socket, socket.socket]:
 
     # creating and binding tcp socket to await for control requests 
     print("\nSetting up TCP socket...")
@@ -108,7 +108,7 @@ def awaitMasterKeyExchange(conn: socket.socket, s: socket.socket, encryption_key
 def awaitControlRequests(
     conn: socket.socket, s: socket.socket, 
     encryption_key: str, hmac_key: str,
-    bind: str = "0.0.0.0", port: int = 41234
+    bind: str = "0.0.0.0",
 ):
     # waiting for control requests
     print("Awaiting control requests...\n")

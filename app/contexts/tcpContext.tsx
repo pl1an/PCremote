@@ -2,29 +2,23 @@ import React, { createContext, useRef, useContext } from 'react';
 import { useState } from 'react';
 
 
-const TcpContext = createContext<any>({ current: null });
-const ConnectionStatusContext = createContext<any>({connection_status: null, setConnectionStatus: null});
-const ConnectionAddressContext = createContext<any>({current: null});
+
+interface TcpContextType {
+    tcp_socket_ref: React.RefObject<any | null>;
+}
+
+
+export const TcpContext = createContext<TcpContextType | null>(null);
 
 export const TcpProvider = ({ children }: any) => {
-    const tcpRef = useRef<any>(null);
-    const addressRef = useRef<string | null>(null);
-    const [connection_status, setConnectionStatus] = useState<"disconnected" | "connected">("disconnected");
+    const tcp_socket_ref = useRef<any>(null);
 
     return (
-        <TcpContext.Provider value={tcpRef}>
-            <ConnectionStatusContext.Provider value={{connection_status, setConnectionStatus}}>
-                <ConnectionAddressContext.Provider value={addressRef}>
+        <TcpContext.Provider value={{tcp_socket_ref}}>
                     {children}
-                </ConnectionAddressContext.Provider>
-            </ConnectionStatusContext.Provider>
         </TcpContext.Provider>
     );
 };
-
-export const useTcp = () => useContext(TcpContext);
-export const useConnectionStatus = () => useContext(ConnectionStatusContext);
-export const useConnectionAddress = () => useContext(ConnectionAddressContext);
 
 // Expo Router expects a default export from files under `app/`
 export default function _TcpRoutePlaceholder() {

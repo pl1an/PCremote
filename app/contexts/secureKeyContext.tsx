@@ -1,30 +1,34 @@
 import React, { createContext, useRef, useContext } from 'react';
 
 
-const MasterKeyContext = createContext<any>({ current: null });
-const HmacKeyContext = createContext<any>({ current: null });
-const EncryptionKeyContext = createContext<any>({ current: null });
+export interface SecureKeyContextType {
+    master_key_ref: React.RefObject<any | null>;
+    hmac_key_ref: React.RefObject<any | null>;
+    encryption_key_ref: React.RefObject<any | null>;
+}
+
+
+const SecureKeyContext = createContext<SecureKeyContextType | null>(null);
 
 export const SecureKeyProvider = ({ children }: any) => {
-    const masterKeyRef = useRef<any>(null);
-    const hmacKeyRef = useRef<any>(null);
-    const encryptionKeyRef = useRef<any>(null);
+    const master_key_ref = useRef<string | null>(null);
+    const hmac_key_ref = useRef<string | null>(null);
+    const encryption_key_ref = useRef<string | null>(null);
 
     return (
-        <MasterKeyContext.Provider value={masterKeyRef}>
-            <HmacKeyContext.Provider value={hmacKeyRef}>
-                <EncryptionKeyContext.Provider value={encryptionKeyRef}>
-                    {children}
-                </EncryptionKeyContext.Provider>
-            </HmacKeyContext.Provider>
-        </MasterKeyContext.Provider>
+        <SecureKeyContext.Provider value={{master_key_ref, hmac_key_ref, encryption_key_ref}}>
+            {children}
+        </SecureKeyContext.Provider>
 
     );
 };
 
-export const useMasterKey = () => useContext(MasterKeyContext);
-export const useHmacKey = () => useContext(HmacKeyContext);
-export const useEncryptionKey = () => useContext(EncryptionKeyContext);
+export const useSecureKeyContext = () => {
+    const context = useContext(SecureKeyContext);
+    if(!context) throw new Error("useSecureKeyContext must be used within a SecureKeyProvider");
+    return context;
+}
+
 
 // Expo Router expects a default export from files under `app/`
 export default function _SecureKeyRoutePlaceholder() {

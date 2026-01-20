@@ -2,12 +2,14 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { TcpProvider } from "./contexts/tcpContext";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SecureKeyProvider } from "./contexts/secureKeyContext";
+import { TcpProvider } from "./contexts/tcpContext";
+import { UdpProvider } from "./contexts/udpContext";
 
 import { StyleSheet } from "react-native";
 import { themes } from "./styles/themes";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { ConnectionStatusProvider } from "./contexts/connectionStatusContext";
 
 
 export type RootStackParamList = {
@@ -37,21 +39,19 @@ export default function RootLayout() {
     return (
         <SafeAreaProvider>
             <GestureHandlerRootView style={{flex:1}}>
-                <TcpProvider>
-                    <SecureKeyProvider>
-                        <Stack.Navigator 
-                            initialRouteName="default"
-                            screenOptions={{
-                                headerShown:false,
-                                presentation: 'transparentModal',
-                                contentStyle: style_sheet.container
-                            }}
-                        >
-                            <Stack.Screen name="default" component={require("./pages/default").Default} />
-                            <Stack.Screen name="controller" component={require("./pages/controller").Controller} />
-                        </Stack.Navigator>
-                    </SecureKeyProvider>
-                </TcpProvider>
+                <ConnectionStatusProvider><UdpProvider><TcpProvider><SecureKeyProvider>
+                    <Stack.Navigator 
+                        initialRouteName="default"
+                        screenOptions={{
+                            headerShown:false,
+                            presentation: 'transparentModal',
+                            contentStyle: style_sheet.container
+                        }}
+                    >
+                        <Stack.Screen name="default" component={require("./pages/default").Default} />
+                        <Stack.Screen name="controller" component={require("./pages/controller").Controller} />
+                    </Stack.Navigator>
+                </SecureKeyProvider></TcpProvider></UdpProvider></ConnectionStatusProvider>
             </GestureHandlerRootView>
         </SafeAreaProvider>
     );
