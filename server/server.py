@@ -2,7 +2,7 @@ import socket
 import time
 
 from securityMaster import receiveSecureMessage, generateMasterKey, deriveKeys, generateEncryptionKeyQRCode, InvalidMessage
-from controlHandler import handleControlRequest, endComunication
+from controlHandler import handleControlRequest, endCommunication
 
 
 
@@ -66,16 +66,19 @@ def awaitTcpConnection(bind: str = "0.0.0.0", port: int = 41234) -> tuple[socket
     return conn, s
 
 
-# awaits for encryption key exchange confirmation from client
-# returns tuple with (master_key, encryption_key, hmac_key) or None if failed
-def awaitEncryptionKeyExchange(conn: socket.socket, s: socket.socket) -> None | tuple[str, str, str]:
-
+# creates master key, derives encryption and hmac keys, generates QR code for master key
+# returns tuple with (master_key, encryption_key, hmac_key)
+def createMasterKey() -> tuple[str, str, str]:
     # generating encryption key and its QR code
     master_key = generateMasterKey(32) 
     encryption_key, hmac_key = deriveKeys(master_key, 32)
     generateEncryptionKeyQRCode(master_key)
+    # confirming that client received the master key
+    return master_key, encryption_key, hmac_key
 
-    # awaiting for client confirmation
+# awaits for encryption key exchange confirmation from client
+# Returns true if client authenticated successfully, false otherwise
+def awaitMasterKeyExchange(conn: socket.socket, s: socket.socket, encryption_key: str, hmac_key: str) -> bool:
     print("\nAwaiting for client authentication...")
     while True:
         data = conn.recv(65535)
@@ -83,23 +86,22 @@ def awaitEncryptionKeyExchange(conn: socket.socket, s: socket.socket) -> None | 
             print("Client disconnected or failed to retrieve data.")
             conn.close()
             s.close()
-            return
+            return False 
         # Receiving and processing secure message
         try:
             text = receiveSecureMessage(data.decode("utf-8"), encryption_key, hmac_key)
             if text == "MASTER_KEY_RECEIVED":
                 conn.sendall(b"CLIENT_AUTHENTICATED")
                 print("Client authenticated successfully.\n")
-                return master_key, encryption_key, hmac_key
+                return True
             else:
                 raise InvalidMessage("Unexpected confirmation message")
         except InvalidMessage as e:
             print("Received invalid authentication message: ", e)
             print("Client may not have received the master key correctly.")
             print("WARNING: Network might be compromised\n")
-            endComunication(conn, s)
-            return None
-
+            endCommunication(conn, s)
+            return False
 
 
 # awaits for control requests from client
@@ -115,10 +117,8 @@ def awaitControlRequests(
         # getting data from client
         data = conn.recv(65535)
         if not data: 
-            print("Client disconnected or failed to retrieve data.")
-            conn.close()
-            s.close()
-            break
+            print("\nClient seems to have disconnected. Awaiting reconnection...")
+            raise ConnectionError("Client disconnected")
         try:
             buffer = ""
             buffer += data.decode("utf-8")
@@ -136,14 +136,23 @@ def main():
     # starting server
     print("PC Remote")
     print("Starting server\n")
-    # connecting to client
+    # finding client via udp broadcast
     awaitBroadcast()
-    conn, s = awaitTcpConnection()
-    # sharing encryption key
-    master_key, encryption_key, hmac_key = awaitEncryptionKeyExchange(conn, s)
+    # creating master key, deriving encryption and hmac keys, generating qr code
+    master_key, encryption_key, hmac_key = createMasterKey()
     # handling control requests
-    if(master_key and encryption_key and hmac_key):
-        awaitControlRequests(conn, s, encryption_key, hmac_key)
+    while True:
+        conn, s = awaitTcpConnection()
+        # sharing encryption key
+        if not awaitMasterKeyExchange(conn, s, encryption_key, hmac_key):
+            print("Failed to authenticate client. Restart the server to try again.")
+            return 1
+        # awaiting control requests
+        try:
+            awaitControlRequests(conn, s, encryption_key, hmac_key)
+            break
+        except ConnectionError:
+            continue
 
 if __name__ == "__main__":
     main()

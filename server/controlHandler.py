@@ -42,7 +42,7 @@ def handleControlRequest(request: str, conn, s) -> int:
 
     # Handling end of communication requests
     if(request == "COMMAND:DISCONNECT"):
-        endComunication(conn, s)
+        endCommunication(conn, s)
         return 1
     if(request == "COMMAND:SHUTDOWN"):
         handleShutdownRequest(conn, s)
@@ -65,7 +65,7 @@ def handleControlRequest(request: str, conn, s) -> int:
         if(len(cordinates) != 2): return 0
         handleMouseMoveRequest(float(cordinates[0]), float(cordinates[1]))
         return 0
-    if(request.startswith("COMMAND:MOUSE_CLICK<") and request.endswith(">")):
+    if(request == "COMMAND:MOUSE_CLICK"):
         pyautogui.click()
         return 0
     if(request.startswith("COMMAND:MOUSE_SCROLL<") and request.endswith(">")):
@@ -89,8 +89,8 @@ def handleControlRequest(request: str, conn, s) -> int:
 
 
 
-# Ends the comunication by sending END_CONNECTION message and closing sockets
-def endComunication(conn, s):
+# Ends the communication by sending END_CONNECTION message and closing sockets
+def endCommunication(conn, s):
     conn.sendall(b"END_CONNECTION")
     conn.close()
     s.close()
@@ -98,7 +98,7 @@ def endComunication(conn, s):
 
 
 def handleShutdownRequest(conn, s):
-    endComunication(conn, s)
+    endCommunication(conn, s)
     os.system("shutdown /s /t 0")
 
 

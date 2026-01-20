@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { use, useRef, useState } from 'react';
 import { View, Text, Button, StyleSheet, Touchable, TouchableOpacity } from 'react-native';
 import { Alert } from 'react-native';
 import { themes } from '../styles/themes';
@@ -18,7 +18,7 @@ import { RootStackParamList } from '../_layout';
 //@ts-expect-error
 import Icon from 'react-native-vector-icons/Ionicons';
 import { deriveKeys } from '../protocols/deriveMaster';
-import { buildMessage } from '../protocols/messageMaster';
+import { buildMessage } from '../protocols/sendMaster';
 
 
 
@@ -28,10 +28,17 @@ interface DefaultProps {
 
 export const Default: React.FC<DefaultProps> = ({navigation}) => {
 
+
+    const MAXIMUM_BROADCAST_TRIES = 5;
     const udp_socket_ref = useRef<any>(null);
+    const broadcast_tries_ref = useRef(0);
+
+    const MAXIMUM_TCP_TRIES = 5;
     const tcp_socket_ref = useTcp();
+    const tcp_tries_ref = useRef(0);
+    const tcp_retry_timeout_ref = useRef<any>(null);
+
     const { connection_status, setConnectionStatus } = useConnectionStatus();
-    let broadcast_tries = 0;
 
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({
@@ -77,7 +84,7 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
         try{
             // Sending message
             let closeTimeout: any
-            if(broadcast_tries == 0) setMessage({show: true, text: 'Sending broadcast message to discover PC...'});
+            if(broadcast_tries_ref.current == 0) setMessage({show: true, text: 'Sending broadcast message to discover PC...'});
             const message = Buffer.from('DISCOVER_PC');
             socket.send(message, 0, message.length, 41234, '255.255.255.255', (err: any) => {
                 if (err) console.warn('UDP send error', err);
@@ -85,13 +92,13 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
 
             // Awaiting response
             closeTimeout = setTimeout(() => {
-                if(broadcast_tries < 5){
-                    broadcast_tries += 1;
-                    setMessage({show: true, text: `No response from PC. Retrying broadcast... (${broadcast_tries}/5)`});
+                if(broadcast_tries_ref.current < 5){
+                    broadcast_tries_ref.current += 1;
+                    setMessage({show: true, text: `No response from PC. Retrying broadcast... (${broadcast_tries_ref.current}/5)`});
                     connectBroadcast();
                 }
                 else{
-                    broadcast_tries = 0;
+                    broadcast_tries_ref.current = 0;
                     setLoading(false);
                     try{
                         socket.close(); 
@@ -144,34 +151,74 @@ export const Default: React.FC<DefaultProps> = ({navigation}) => {
     const connectIp = () => {
     };
 
-    
+
+    const cleanupTcp  = () => {
+        if(tcp_retry_timeout_ref.current){
+            clearTimeout(tcp_retry_timeout_ref.current);
+            tcp_retry_timeout_ref.current = null;
+        }
+        if(tcp_socket_ref && tcp_socket_ref.current){
+            try{
+                tcp_socket_ref.current.removeAllListeners();
+                tcp_socket_ref.current.destroy();
+                tcp_socket_ref.current = null;
+            }
+            catch (e){
+                console.warn('Failed to cleanup TCP socket', e);
+            }
+        }
+    };
+
     const stablishTcpConnection = (address:any) => {
+        cleanupTcp();
         const server = TcpSocket.createConnection({
             host: address,
             port: 41234, 
         }, () => {
-            // wait for confirmation from server
             console.log('TCP connected. Awaiting key sharing...');
-            server.on('data', (data) => {
-                if(data.toString() === "CONFIRMED_CONNECTION"){
-                    setMessage({show: true, text: 'Scan the QR code on your PC to share the encryption key.'});
-                    if (tcp_socket_ref && typeof tcp_socket_ref === 'object') {
-                        try {
-                            tcp_socket_ref.current = server;
-                        }
-                        catch (e) {
-                            console.warn('Failed to set tcp ref current', e);
-                        }
-                    }
-                    else {
-                        console.warn('TCP context ref is null or not available');
-                    }
-                    setLoading(false);
-                    setConnectionStatus("connected");
-                    setWaitingForQr("Waiting camera button press");
-                }
-            });
         });
+        if(tcp_socket_ref) tcp_socket_ref.current = server;
+        // wait for confirmation from server
+        server.on('data', (data) => {
+            if(data.toString() === "CONFIRMED_CONNECTION"){
+                setMessage({show: true, text: 'Scan the QR code on your PC to share the encryption key.'});
+                if (tcp_socket_ref && typeof tcp_socket_ref === 'object') {
+                    try {
+                        tcp_socket_ref.current = server;
+                    }
+                    catch (e) {
+                        console.warn('Failed to set tcp ref current', e);
+                    }
+                }
+                else {
+                    console.warn('TCP context ref is null or not available');
+                }
+                // Connection established successfully and destroying retry timeout
+                if(tcp_retry_timeout_ref.current){
+                    clearTimeout(tcp_retry_timeout_ref.current);
+                    tcp_retry_timeout_ref.current = null;
+                }
+                setLoading(false);
+                setConnectionStatus("connected");
+                setWaitingForQr("Waiting camera button press");
+            }
+        });
+        // Creating timeout for connection retries
+        if(!tcp_retry_timeout_ref.current){
+            tcp_retry_timeout_ref.current = setTimeout(() => {
+                if(tcp_tries_ref.current < MAXIMUM_TCP_TRIES){
+                    tcp_tries_ref.current += 1;
+                    setMessage({show: true, text: `TCP connection timed out. Retrying... (${tcp_tries_ref.current}/${MAXIMUM_TCP_TRIES})`});
+                    stablishTcpConnection(address);
+                }
+                else{
+                    tcp_tries_ref.current = 0;
+                    setLoading(false);
+                    setMessage({show: true, text: 'Failed to establish TCP connection. Please try reconnecting.'});
+                    setConnectionStatus("disconnected");
+                }
+            }, 2000);
+        }
     };
 
 

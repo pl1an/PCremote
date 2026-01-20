@@ -13,6 +13,6 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts", 
-    "app/protocols/deriveMaster.js", "app/protocols/messageMaster.js",
+    "app/protocols/deriveMaster.js", "app/protocols/sendMaster.js",
   ]
 }

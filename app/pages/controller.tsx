@@ -6,7 +6,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { useConnectionStatus, useTcp } from '../contexts/tcpContext';
 import { useEncryptionKey, useHmacKey } from '../contexts/secureKeyContext';
-import { buildMessage } from '../protocols/messageMaster';
+import { buildMessage } from '../protocols/sendMaster';
 import { BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Mousepad from '../components/mousepad';
@@ -109,7 +109,7 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
         }
     }
     const onMouseClick = (x: number, y: number) => {
-        sendControlSignal("COMMAND:MOUSE_CLICK<" + x + "," + y + ">")
+        sendControlSignal("COMMAND:MOUSE_CLICK")
     }
     const onMouseScroll = (x: number, y: number) => {
         sendControlSignal("COMMAND:MOUSE_SCROLL<" + x + "," + y + ">")
@@ -142,11 +142,11 @@ export const Controller: React.FC<ControllerProps> = ({ navigation }) => {
                     navigation={navigation}
                 />
                 <View>
-                    <TouchableOpacity style={{...style_sheet.generic_button, marginBottom: 30}} onPress={() => setCommand("keyboard")}>
+                    <TouchableOpacity style={{...style_sheet.generic_button, marginBottom: 30, width: '80%', height: 60}} onPress={() => setCommand("keyboard")}>
                         <Text style={style_sheet.button_text} onPress={() => setCommand("keyboard")}>Keyboard</Text>
                         <EntypoIcon name="keyboard" size={40} color={themes.default.primary} style={{...style_sheet.button_icon, }}/>
                     </TouchableOpacity>
-                    <TouchableOpacity style={style_sheet.generic_button} onPress={() => setCommand("mouse")}>
+                    <TouchableOpacity style={{...style_sheet.generic_button, width: '80%', height: 60}} onPress={() => setCommand("mouse")}>
                         <Text style={style_sheet.button_text} onPress={() => setCommand("mouse")}>Mouse</Text>
                         <MaterialIcon name="mouse" size={40} color={themes.default.primary} style={style_sheet.button_icon}/>
                     </TouchableOpacity>
