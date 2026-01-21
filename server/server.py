@@ -114,24 +114,30 @@ def awaitControlRequests(
     print("Awaiting control requests...\n")
     awaiting_control_requests = True
     while awaiting_control_requests:
-        # getting data from client
-        data = conn.recv(65535)
-        if not data: 
-            print("\nClient seems to have disconnected. Awaiting reconnection...")
-            raise ConnectionError("Client disconnected")
         try:
-            buffer = ""
-            buffer += data.decode("utf-8")
-            while "\n" in buffer:
-                packet, buffer = buffer.split("\n", 1) 
-                text = receiveSecureMessage(packet, encryption_key, hmac_key)
-                if not text: raise InvalidMessage("Empty control request")
-                # sending acknowledgment
-                conn.sendall(buildMessage("ACK:" + text, encryption_key, hmac_key).encode("utf-8"))
-                # handling control request
-                if handleControlRequest(text, conn, s): awaiting_control_requests = False
-        except Exception as e:
-            print("Received invalid control message: " +  str(e))
+            data = conn.recv(65535)
+            if not data: 
+                print("\nClient seems to have disconnected. Awaiting reconnection...")
+                raise ConnectionError("Client disconnected")
+            try:
+                buffer = ""
+                buffer += data.decode("utf-8")
+                while "\n" in buffer:
+                    packet, buffer = buffer.split("\n", 1) 
+                    text = receiveSecureMessage(packet, encryption_key, hmac_key)
+                    if not text: raise InvalidMessage("Empty control request")
+                    # sending acknowledgment
+                    conn.sendall(buildMessage("ACK:" + text, encryption_key, hmac_key).encode("utf-8"))
+                    # handling control request
+                    if handleControlRequest(text, conn, s): awaiting_control_requests = False
+            except InvalidMessage as e:
+                print("Received invalid control message: " +  str(e))
+        except socket.timeout:
+            print("\nConnection timed out - client not responding")
+            raise ConnectionError("Connection timeout")
+        except (TimeoutError, OSError) as e:
+            print(f"\nConnection error: {e}")
+            raise ConnectionError(f"Socket error: {e}")
 
 
 
